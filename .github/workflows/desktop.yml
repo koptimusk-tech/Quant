@@ -1,0 +1,86 @@
+name: Desktop installers
+
+# Builds the desktop app with the Python backend frozen inside (no Python needed on the user's machine).
+# Run it from the Actions tab, or push a tag like v0.3.0 to also publish a GitHub release with the installers.
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            extras: postgres,yahoo,crypto,metatrader
+          - os: macos-latest
+            extras: postgres,yahoo,crypto
+          - os: ubuntu-22.04
+            extras: postgres,yahoo,crypto
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+      - name: Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - name: Freeze the backend
+        run: |
+          pip install -e "./backend[${{ matrix.extras }}]" pyinstaller
+          python desktop/scripts/build_sidecar.py
+      - name: Smoke-test the frozen backend
+        shell: bash
+        run: |
+          exe=desktop/sidecar/qal-server/qal-server; [ "$RUNNER_OS" = Windows ] && exe="$exe.exe"
+          export QAL_DATABASE_URL="sqlite:///$RUNNER_TEMP/smoke.db" QAL_DATA_DIR="$RUNNER_TEMP/smoke"
+          "$exe" --port 8799 > "$RUNNER_TEMP/sidecar.log" 2>&1 &
+          for i in $(seq 1 90); do curl -sf http://127.0.0.1:8799/api/v1/health && exit 0; sleep 1; done
+          cat "$RUNNER_TEMP/sidecar.log"; exit 1
+      - name: Build the web UI
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+      - name: Build the installer
+        working-directory: desktop
+        run: |
+          npm ci
+          npx tauri build --config src-tauri/tauri.sidecar.conf.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: quant-anomaly-lab-${{ runner.os }}
+          path: |
+            desktop/src-tauri/target/release/bundle/**/*.msi
+            desktop/src-tauri/target/release/bundle/**/*-setup.exe
+            desktop/src-tauri/target/release/bundle/**/*.dmg
+            desktop/src-tauri/target/release/bundle/**/*.deb
+            desktop/src-tauri/target/release/bundle/**/*.AppImage
+            desktop/src-tauri/target/release/bundle/**/*.rpm
+          if-no-files-found: error
+      - name: Attach to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            desktop/src-tauri/target/release/bundle/**/*.msi
+            desktop/src-tauri/target/release/bundle/**/*-setup.exe
+            desktop/src-tauri/target/release/bundle/**/*.dmg
+            desktop/src-tauri/target/release/bundle/**/*.deb
+            desktop/src-tauri/target/release/bundle/**/*.AppImage
+            desktop/src-tauri/target/release/bundle/**/*.rpm

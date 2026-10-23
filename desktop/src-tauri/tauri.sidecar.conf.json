@@ -1,0 +1,12 @@
+{
+  "bundle": {
+    "resources": {
+      "../../backend/qal": null,
+      "../../backend/migrations": null,
+      "../../backend/alembic.ini": null,
+      "../../backend/pyproject.toml": null,
+      "../sidecar/qal-server": "qal-server",
+      "../../frontend/dist": "web"
+    }
+  }
+}

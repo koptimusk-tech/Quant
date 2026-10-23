@@ -39,9 +39,9 @@ Adelantado de la Fase 4: DSR, PBO, bootstrap por bloques y test final aislado ya
 
 ## ✅ Aplicación de escritorio (primera versión)
 Tauri 2 (`desktop/`) que arranca el backend local, sirve la interfaz y abre en la pantalla **Pruebas**: elegir
-detectores o hipótesis, ejecutarlos ahora o programarlos, y ver el historial. Pendiente: empaquetar Python con el
-instalador (hoy necesita Python 3.11+ con el backend instalado), firma de código, notificaciones del sistema y
-pruebas en Windows/macOS (MetaTrader 5 solo funciona en Windows).
+detectores o hipótesis, ejecutarlos ahora o programarlos, y ver el historial. Los instaladores para Windows, macOS
+y Linux se generan en GitHub Actions con el backend congelado (PyInstaller), sin necesidad de Python; el de
+Windows incluye MetaTrader 5. Pendiente: firma de código, notificaciones del sistema y actualización automática.
 
 ## Fase 3 — Agentes de investigación
 Anomaly Discovery, LLM Alpha Mining, Quant Research, Adversarial Reviewer y Research Coordinator, con salidas

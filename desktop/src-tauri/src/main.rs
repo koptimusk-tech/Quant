@@ -1,6 +1,7 @@
 // Desktop shell for Quant Anomaly Lab.
 //
-// Starts the local Python API (uvicorn) as a child process, waits for /api/v1/health and
+// Starts the local Python API as a child process (the bundled `qal-server` sidecar in installers, or
+// `python -m uvicorn` in development), waits for /api/v1/health and
 // then points the window at it. The API serves the built web UI, so the desktop app and the
 // browser show the same screens (scanner, tests, research lab, data health, schedules).
 // No credentials pass through this shell; the backend reads them from its own environment.
@@ -8,7 +9,7 @@
 
 use std::io::{Read, Write};
 use std::net::TcpStream;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
@@ -41,22 +42,46 @@ fn python() -> String {
     std::env::var("QAL_PYTHON").unwrap_or_else(|_| if cfg!(windows) { "python".into() } else { "python3".into() })
 }
 
+/// The frozen backend shipped by installers (desktop/scripts/build_sidecar.py), if present.
+fn sidecar(resources: &Path) -> Option<PathBuf> {
+    let exe = if cfg!(windows) { "qal-server.exe" } else { "qal-server" };
+    let path = resources.join("qal-server").join(exe);
+    path.is_file().then_some(path)
+}
+
 fn spawn_backend(app: &tauri::AppHandle, port: u16) -> std::io::Result<Child> {
     let resources = app.path().resource_dir().unwrap_or_else(|_| PathBuf::from("."));
-    // Development: QAL_BACKEND_DIR points at the repository's backend/ folder.
-    let backend_dir = std::env::var("QAL_BACKEND_DIR").map(PathBuf::from).unwrap_or_else(|_| resources.join("backend"));
     let web_dir = std::env::var("QAL_FRONTEND_DIST").map(PathBuf::from).unwrap_or_else(|_| resources.join("web"));
     let data_dir = app.path().app_data_dir().unwrap_or_else(|_| PathBuf::from("./var"));
     std::fs::create_dir_all(&data_dir)?;
     let db = data_dir.join("qal.db");
-    let mut cmd = Command::new(python());
-    cmd.current_dir(&backend_dir)
-        .args(["-m", "uvicorn", "qal.api.main:app", "--host", "127.0.0.1", "--port", &port.to_string()])
-        .env("PYTHONPATH", &backend_dir)
-        .env("QAL_EXIT_WITH_PARENT", "1")
+    // QAL_PYTHON forces the interpreter path even when a sidecar is bundled (useful to debug an install).
+    let mut cmd = match sidecar(&resources).filter(|_| std::env::var("QAL_PYTHON").is_err()) {
+        Some(exe) => {
+            let mut c = Command::new(&exe);
+            c.current_dir(&data_dir).args(["--host", "127.0.0.1", "--port", &port.to_string()]);
+            c
+        }
+        None => {
+            // Development: QAL_BACKEND_DIR points at the repository's backend/ folder.
+            let backend_dir =
+                std::env::var("QAL_BACKEND_DIR").map(PathBuf::from).unwrap_or_else(|_| resources.join("backend"));
+            let mut c = Command::new(python());
+            c.current_dir(&backend_dir)
+                .args(["-m", "uvicorn", "qal.api.main:app", "--host", "127.0.0.1", "--port", &port.to_string()])
+                .env("PYTHONPATH", &backend_dir);
+            c
+        }
+    };
+    cmd.env("QAL_EXIT_WITH_PARENT", "1")
         .env("QAL_FRONTEND_DIST", &web_dir)
         .env("QAL_DATA_DIR", data_dir.join("data"))
         .env("QAL_DATABASE_URL", format!("sqlite:///{}", db.display()).replace('\\', "/"));
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW: no console window behind the app
+    }
     cmd.spawn()
 }
 
@@ -69,7 +94,7 @@ fn main() {
             if !healthy(port) {
                 match spawn_backend(&handle, port) {
                     Ok(child) => *app.state::<Backend>().0.lock().unwrap() = Some(child),
-                    Err(e) => eprintln!("could not start backend with {}: {e}", python()),
+                    Err(e) => eprintln!("could not start the local backend: {e}"),
                 }
             }
             std::thread::spawn(move || {
@@ -79,7 +104,7 @@ fn main() {
                         if let Some(w) = handle.get_webview_window("main") {
                             let _ = w.eval(
                                 "document.getElementById('msg').textContent = 'No se pudo arrancar la API local. \
-                                 Revisa que Python y el backend estén instalados (QAL_PYTHON, QAL_BACKEND_DIR).'",
+                                 Reinstala la aplicación o, en desarrollo, revisa QAL_PYTHON y QAL_BACKEND_DIR.'",
                             );
                         }
                         return;
