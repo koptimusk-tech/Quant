@@ -2,6 +2,10 @@ import { NavLink, Route, Routes } from "react-router-dom";
 import Scanner from "./pages/Scanner";
 import AnomalyDetailPage from "./pages/AnomalyDetail";
 import DataHealthPage from "./pages/DataHealth";
+import TestsPage from "./pages/Tests";
+import ResearchPage from "./pages/Research";
+import HypothesisDetailPage from "./pages/HypothesisDetail";
+import ValidationReport from "./pages/ValidationReport";
 
 const link = ({ isActive }: { isActive: boolean }) =>
   `rounded-md px-3 py-1.5 text-sm ${isActive ? "bg-slate-200 font-medium dark:bg-slate-800" : "hover:bg-slate-100 dark:hover:bg-slate-900"}`;
@@ -16,6 +20,12 @@ export default function App() {
             <NavLink to="/" end className={link}>
               Market Scanner
             </NavLink>
+            <NavLink to="/tests" className={link}>
+              Tests
+            </NavLink>
+            <NavLink to="/research" className={link}>
+              Research Lab
+            </NavLink>
             <NavLink to="/data" className={link}>
               Data Health
             </NavLink>
@@ -28,6 +38,10 @@ export default function App() {
           <Route path="/" element={<Scanner />} />
           <Route path="/anomalies/:id" element={<AnomalyDetailPage />} />
           <Route path="/data" element={<DataHealthPage />} />
+          <Route path="/tests" element={<TestsPage />} />
+          <Route path="/research" element={<ResearchPage />} />
+          <Route path="/research/:id" element={<HypothesisDetailPage />} />
+          <Route path="/validations/:id" element={<ValidationReport />} />
         </Routes>
       </main>
     </div>

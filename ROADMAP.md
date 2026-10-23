@@ -23,15 +23,25 @@ Pendiente de verificar fuera de este entorno: descargas reales (la red del entor
 proveedores; los adaptadores están probados con respuestas simuladas y hay pruebas `-m network` para ejecutarlas
 en local) y `docker compose build` (Docker Hub limitó las descargas durante la prueba).
 
-## Fase 2 — Investigación y backtesting
-- Contratos de hipótesis (Pydantic, validados): premisa, anomalía origen, universo, mecanismo, variables,
-  entrada/salida, horizonte, benchmark, costes, invalidación, métrica de éxito y diseño OOS fijados **antes** de
-  ver resultados.
-- Motor de backtesting event-driven sobre `available_ts`, con modelo de costes por instrumento (comisión, spread,
-  slippage, financiación, funding, rollover) y restricciones de liquidez.
-- Walk-forward, purging y embargo; controles de leakage; métricas de robustez.
-- Máquina de estados de investigación y primeras transiciones controladas por el motor de políticas.
-- Pantallas Quant Research Lab y Backtesting & Validation.
+## ✅ Fase 2 — Investigación y backtesting
+- Contratos de hipótesis congelados y versionados (Pydantic): premisa, anomalías origen, universo, mecanismo,
+  estrategia y rejilla de parámetros (≤ 200 variantes), horizonte, benchmark, costes, invalidación, criterios de
+  éxito y diseño OOS fijados **antes** de ver resultados. Se rechaza redacción vaga.
+- Backtest vectorizado sobre `available_ts` con ejecución a la apertura de la barra siguiente; costes completos
+  (comisión, spread, slippage fijo y por rango, préstamo, financiación, funding, rollover) y límite de participación.
+- Walk-forward con embargo, K-fold purgado, holdout aislado con contador de accesos.
+- DSR (contando todas las pruebas de la familia), PBO (CSCV), bootstrap por bloques, placebo por desplazamiento
+  circular, sensibilidad a costes y parámetros, regímenes, controles de leakage.
+- Gates A–D por el motor de políticas; máquina de estados con transiciones reservadas a la política.
+- Pantallas: Pruebas, Quant Research Lab, Hipótesis y Backtesting & Validation.
+
+Adelantado de la Fase 4: DSR, PBO, bootstrap por bloques y test final aislado ya están en la Fase 2.
+
+## ✅ Aplicación de escritorio (primera versión)
+Tauri 2 (`desktop/`) que arranca el backend local, sirve la interfaz y abre en la pantalla **Pruebas**: elegir
+detectores o hipótesis, ejecutarlos ahora o programarlos, y ver el historial. Pendiente: empaquetar Python con el
+instalador (hoy necesita Python 3.11+ con el backend instalado), firma de código, notificaciones del sistema y
+pruebas en Windows/macOS (MetaTrader 5 solo funciona en Windows).
 
 ## Fase 3 — Agentes de investigación
 Anomaly Discovery, LLM Alpha Mining, Quant Research, Adversarial Reviewer y Research Coordinator, con salidas
@@ -59,19 +69,3 @@ degradación y alertas. Pantallas Portfolio & Risk y Paper Trading.
 ## Fase 7 — DRL y ejecución real opcional
 Interfaz experimental DRL/LLM-RL fuera del camino crítico. Adaptadores de ejecución en un servicio separado,
 deshabilitados por defecto, con autorización explícita (Gate F), límites independientes y pruebas de seguridad.
-
-## Aplicación de escritorio (tras estabilizar el núcleo, en paralelo a las Fases 2–3)
-Petición del usuario: una app de escritorio para **seleccionar qué pruebas realizar, ejecutarlas y programarlas**.
-
-Diseño previsto:
-- Cliente de escritorio (Tauri o Electron) que empaqueta el frontend React existente y arranca/conecta con la API
-  local. Tauri es la opción preferida por tamaño y consumo; Electron si se necesita integración Node.
-- Catálogo de pruebas desde la API (`GET /api/v1/detectors`, y en fases siguientes validaciones y backtests) con
-  formularios de parámetros, selección de universo y datasets.
-- Ejecución inmediata (`POST /scans`, `POST /jobs`) con progreso y cancelación, y programación
-  (`/schedules`) con vista de calendario e historial de ejecuciones.
-- Notificaciones del sistema al terminar un trabajo o al detectar anomalías que cumplan una consulta guardada.
-- En Windows, la app permitirá usar el terminal MetaTrader 5 local como fuente de datos.
-
-Las bases ya existen en la Fase 1: trabajos persistentes, idempotencia, cancelación, programaciones y
-descargas automáticas expuestas por la API.

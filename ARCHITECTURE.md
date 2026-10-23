@@ -22,6 +22,14 @@ backend/qal/
     quality.py             Gate A: comprobaciones de calidad
     store.py               almacén Parquet direccionado por contenido
     ingest.py              fetch → normalizar → fusionar (incremental) → calidad → guardar → registrar
+  research/                Research, Backtesting y Validation (Fase 2)
+    contract.py            contrato de hipótesis, estrategia, criterios, diseño OOS
+    strategies.py          estrategias deterministas (evento, momentum, reversión de pares, buy&hold)
+    costs.py, backtest.py  modelo de costes y backtest con ejecución a la apertura siguiente
+    metrics.py             métricas, bootstrap por bloques, DSR, PBO
+    validation.py          walk-forward con embargo, K-fold purgado, robustez, leakage, holdout
+    policy.py, states.py   gates A–D y máquina de estados
+    service.py             persistencia, recuento de pruebas, transiciones
   features/basic.py        Feature Engineering (causal): retornos, EWMA vol, estadísticos robustos de ventana
   anomaly/                 Anomaly Detection Engine
     base.py, detectors.py  detectores versionados
@@ -30,11 +38,11 @@ backend/qal/
   api/                     Web API (FastAPI, /api/v1)
   cli.py                   CLI (demo, ingest, scan, worker)
 frontend/                  React + TypeScript + Vite + Tailwind
+desktop/                   Tauri 2: lanza el backend como proceso hijo y muestra la interfaz
 ```
 
-Los módulos de fases posteriores (Research and Hypothesis Service, Backtesting Engine, Validation Service,
-Portfolio and Risk Engine, Agent Orchestrator, Alerting) se añadirán como paquetes hermanos
-(`qal/research`, `qal/backtest`, `qal/validation`, `qal/risk`, `qal/agents`, `qal/alerts`). No se separan en
+Los módulos de fases posteriores (Portfolio and Risk Engine, Agent Orchestrator, Alerting) se añadirán como paquetes hermanos
+(`qal/risk`, `qal/agents`, `qal/alerts`). No se separan en
 microservicios mientras no haya una necesidad de escalado o aislamiento concreta; la excepción prevista es el
 servicio de ejecución (Fase 7), que irá en un proceso aparte con sus propias credenciales (DECISIONS D-008).
 
@@ -69,20 +77,33 @@ Los trabajos (`ingest`, `scan`, `ingest_and_scan`) se ejecutan en un hilo de fon
 | `jobs`, `schedules` | Cola persistente y programaciones. |
 | `saved_queries` | Consultas guardadas del Market Scanner. |
 | `audit_events` | Auditoría de acciones (actor, acción, entidad, detalles). |
+| `hypotheses` | Contrato congelado, familia, versión, padre, estado, accesos al test final, contaminación. |
+| `gate_decisions` | Resultado de cada gate por validación: aprobado, motivo, métricas, versión de la política. |
+
+`experiments.hypothesis_id` enlaza cada validación y test final con su hipótesis.
 
 Migraciones: `backend/migrations` (Alembic). `tests/test_migrations.py` comprueba que la migración produce
 exactamente el esquema ORM.
 
-Entidades previstas en fases siguientes: Hypotheses, Backtest Runs, Validation Reports, Strategy Versions,
-Risk Policies, Gate Decisions, Agent Runs, Paper Orders, Portfolio Positions, Features (catálogo).
+Entidades previstas en fases siguientes: Strategy Versions, Risk Policies, Agent Runs, Paper Orders, Portfolio Positions, Features (catálogo).
 
 ## Estados de investigación
 
-Toda anomalía nace en `DISCOVERED`. La máquina de estados completa (`INVESTIGATING`, `HYPOTHESIS_FORMULATED`,
-`BACKTEST_PENDING`, `VALIDATION_FAILED`, `VALIDATION_PASSED`, `PAPER_TRADING`, `RISK_APPROVED`, `LIVE_ELIGIBLE`,
-`LIVE_ENABLED`, `SUSPENDED`, `REJECTED`) y sus transiciones controladas por el motor de políticas se implementan
-en las Fases 2, 3 y 6. Las transiciones solo las podrá ejecutar el motor de políticas determinista; los agentes
-podrán solicitarlas, nunca forzarlas.
+Toda anomalía nace en `DISCOVERED` y pasa a `HYPOTHESIS_FORMULATED` al crear una hipótesis que la cita.
+Las hipótesis recorren `HYPOTHESIS_FORMULATED → BACKTEST_PENDING → VALIDATION_PASSED | VALIDATION_FAILED`,
+además de `SUSPENDED` y `REJECTED` (`qal/research/states.py`). `VALIDATION_PASSED` solo lo asigna el motor de
+políticas tras aprobar los gates A–D. `PAPER_TRADING`, `RISK_APPROVED`, `LIVE_ELIGIBLE` y `LIVE_ENABLED` existen en
+el modelo, pero están bloqueados hasta que existan los gates E y F (Fase 6/7). Los agentes podrán solicitar
+transiciones, nunca forzarlas.
+
+## Flujo de validación (Fase 2)
+
+```
+Contrato ─▶ datos (Gate A) ─▶ alinear por available_ts ─▶ separar holdout (no se toca)
+   ─▶ walk-forward: elegir variante en train → evaluar en test (con embargo) ─▶ OOS concatenado
+   ─▶ robustez (costes ×, parámetros, regímenes, bootstrap, placebo) + DSR/PBO con pruebas de la familia
+   ─▶ leakage (truncado, retardo, holdout, separación) ─▶ gates A–D ─▶ transición por política
+```
 
 ## Puntuaciones
 

@@ -11,3 +11,6 @@ frontend/dist/
 frontend/test-results/
 frontend/playwright-report/
 *.tsbuildinfo
+desktop/node_modules/
+desktop/src-tauri/target/
+desktop/src-tauri/gen/

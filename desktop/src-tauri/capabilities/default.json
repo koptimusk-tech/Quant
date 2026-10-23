@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "No privileged APIs are exposed to the web UI: it talks to the local API over HTTP only.",
+  "windows": ["main"],
+  "permissions": []
+}

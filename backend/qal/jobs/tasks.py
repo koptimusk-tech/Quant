@@ -44,11 +44,27 @@ def handle_ingest(session: Session, payload: dict[str, Any], actor: str) -> dict
     return {"ingested": results, "errors": errors}
 
 
+def resolve_latest(session: Session, instrument_ids: list[str]) -> list[str]:
+    from sqlalchemy import select
+
+    from qal.models import Dataset
+
+    out = []
+    for iid in instrument_ids:
+        ds = session.scalar(select(Dataset).where(Dataset.instrument_id == iid, Dataset.is_latest.is_(True))
+                            .order_by(Dataset.ingested_at.desc()).limit(1))
+        if ds is None:
+            raise ValueError(f"instrument {iid} has no dataset")
+        out.append(ds.id)
+    return out
+
+
 def handle_scan(session: Session, payload: dict[str, Any], actor: str) -> dict[str, Any]:
     cfg = ScanConfig(
-        dataset_ids=list(payload.get("dataset_ids", [])),
+        dataset_ids=list(payload.get("dataset_ids", [])) + resolve_latest(session, payload.get("instrument_ids", [])),
         detectors=payload.get("detectors") or ScanConfig().detectors,
-        pairs=[tuple(p) for p in payload.get("pairs", [])],
+        pairs=[tuple(p) for p in payload.get("pairs", [])]
+        + [tuple(resolve_latest(session, list(p))) for p in payload.get("instrument_pairs", [])],
         cost_bps=payload.get("cost_bps", {}),
         min_dollar_volume=payload.get("min_dollar_volume", ScanConfig().min_dollar_volume),
         label=payload.get("label", ""),
@@ -67,10 +83,28 @@ def handle_ingest_and_scan(session: Session, payload: dict[str, Any], actor: str
     ds_ids = [r["dataset_id"] for r in ing["ingested"]]
     by_symbol = {r["symbol"]: r["dataset_id"] for r in ing["ingested"]}
     pairs = [(by_symbol[a], by_symbol[b]) for a, b in payload.get("pairs", []) if a in by_symbol and b in by_symbol]
+    by_instrument = {r["instrument_id"]: r["dataset_id"] for r in ing["ingested"]}
+    pairs += [(by_instrument[a], by_instrument[b]) for a, b in payload.get("instrument_pairs", [])
+              if a in by_instrument and b in by_instrument]
     scan = handle_scan(session, {"dataset_ids": ds_ids, "detectors": payload.get("detectors"), "pairs": pairs,
                                  "label": payload.get("label", "scheduled")}, actor)
     return {**ing, **scan}
 
 
-HANDLERS = {"ingest": handle_ingest, "scan": handle_scan, "ingest_and_scan": handle_ingest_and_scan}
+def handle_validate(session: Session, payload: dict[str, Any], actor: str) -> dict[str, Any]:
+    from qal.models import Hypothesis
+    from qal.research.service import run_validation
+
+    hyp = session.get(Hypothesis, payload["hypothesis_id"])
+    if hyp is None:
+        raise ValueError("unknown hypothesis")
+    exp = run_validation(session, hyp, actor=actor)
+    session.commit()
+    if exp.status == "failed":
+        raise RuntimeError(exp.error or "validation failed")
+    return {"experiment_id": exp.id, "decision": exp.results.get("decision"), "status": hyp.status}
+
+
+HANDLERS = {"ingest": handle_ingest, "scan": handle_scan, "ingest_and_scan": handle_ingest_and_scan,
+            "validate": handle_validate}
 __all__ = ["HANDLERS", "latest_dataset"]

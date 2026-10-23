@@ -110,7 +110,8 @@ class Experiment(Base):
     __tablename__ = "experiments"
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
-    kind: Mapped[str] = mapped_column(String(32))  # anomaly_scan, (later) backtest, validation...
+    kind: Mapped[str] = mapped_column(String(32))  # anomaly_scan, backtest, validation, final_test
+    hypothesis_id: Mapped[str | None] = mapped_column(ForeignKey("hypotheses.id"), index=True)
     status: Mapped[str] = mapped_column(String(16), default="running")  # running, succeeded, failed
     algorithm_version: Mapped[str] = mapped_column(Text)
     code_version: Mapped[str] = mapped_column(String(64))
@@ -213,4 +214,39 @@ class AuditEvent(Base):
     entity_type: Mapped[str] = mapped_column(String(32))
     entity_id: Mapped[str | None] = mapped_column(String(64))
     details: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class Hypothesis(Base):
+    """A falsifiable alpha hypothesis. The contract (incl. success criteria) is frozen once created."""
+
+    __tablename__ = "hypotheses"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    family_id: Mapped[str] = mapped_column(String(32), index=True)  # shared by all versions
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    parent_id: Mapped[str | None] = mapped_column(ForeignKey("hypotheses.id"))
+    title: Mapped[str] = mapped_column(String(200))
+    status: Mapped[str] = mapped_column(String(32), default="HYPOTHESIS_FORMULATED", index=True)
+    contract: Mapped[dict[str, Any]] = mapped_column(JSON)
+    contract_hash: Mapped[str] = mapped_column(String(64))
+    created_by: Mapped[str] = mapped_column(String(64), default="api")
+    final_test_accesses: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class GateDecision(Base):
+    """Deterministic policy decision. Only the policy engine writes these."""
+
+    __tablename__ = "gate_decisions"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    hypothesis_id: Mapped[str | None] = mapped_column(ForeignKey("hypotheses.id"), index=True)
+    experiment_id: Mapped[str | None] = mapped_column(ForeignKey("experiments.id"))
+    gate: Mapped[str] = mapped_column(String(8))  # A..F
+    decision: Mapped[str] = mapped_column(String(8))  # pass, block
+    reasons: Mapped[list[str]] = mapped_column(JSON, default=list)
+    evidence: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    policy_version: Mapped[str] = mapped_column(String(16))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
