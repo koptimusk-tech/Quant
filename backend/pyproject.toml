@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "quant-anomaly-lab"
+version = "0.1.0"
+description = "Quant Anomaly Lab: point-in-time anomaly discovery and quantitative research platform"
+requires-python = ">=3.11"
+dependencies = [
+  "numpy>=1.26",
+  "pandas>=2.2",
+  "scipy>=1.12",
+  "statsmodels>=0.14",
+  "pyarrow>=15",
+  "fastapi>=0.110",
+  "uvicorn[standard]>=0.29",
+  "sqlalchemy>=2.0",
+  "alembic>=1.13",
+  "pydantic>=2.6",
+  "pydantic-settings>=2.2",
+  "httpx>=0.27",
+  "python-multipart>=0.0.9",
+]
+
+[project.optional-dependencies]
+postgres = ["psycopg[binary]>=3.1"]
+yahoo = ["yfinance>=0.2.40"]
+crypto = ["ccxt>=4.2"]
+metatrader = ["MetaTrader5>=5.0.45; sys_platform == 'win32'"]
+dev = ["pytest>=8", "httpx>=0.27"]
+all = ["quant-anomaly-lab[postgres,yahoo,crypto,dev]"]
+
+[tool.setuptools.packages.find]
+include = ["qal*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+  "network: tests that call real external providers (disabled by default)",
+]
+addopts = "-m 'not network'"
