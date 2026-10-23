@@ -38,7 +38,10 @@ Estado: **Fases 0, 1 y 2 completadas, con app de escritorio.** Ver [ROADMAP.md](
   parámetros, estabilidad por ventana y régimen, bootstrap por bloques, placebo, Deflated Sharpe Ratio, PBO,
   comprobaciones de leakage y hard gates A–D deterministas que ningún usuario ni agente puede anular.
 - **Pantallas** Tests (elegir, ejecutar y programar pruebas), Quant Research Lab y Backtesting & Validation.
-- **App de escritorio** (Tauri) que arranca el motor local y abre la interfaz. Ver [desktop/README.md](desktop/README.md).
+- **App de escritorio** (Tauri) que arranca el motor local y abre la interfaz. Instaladores para Windows, macOS y
+  Linux sin necesidad de Python, generados en GitHub Actions. Ver [desktop/README.md](desktop/README.md).
+- **Integración continua** (`.github/workflows/ci.yml`): pruebas del backend en SQLite y PostgreSQL, frontend y
+  extremo a extremo con navegador en cada cambio.
 
 ## Arranque rápido (desarrollo, sin Docker)
 

@@ -2335,7 +2335,7 @@ dependencies = [
 
 [[package]]
 name = "quant-anomaly-lab"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "serde_json",
  "tauri",

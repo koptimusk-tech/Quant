@@ -40,6 +40,24 @@ async def lifespan(app: FastAPI):
         worker.stop()
 
 
+def _parent_alive(pid: int) -> bool:
+    import os
+
+    if os.name == "nt":
+        # getppid() keeps returning the original id on Windows, so ask the OS whether that process still runs.
+        import ctypes
+
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.OpenProcess(0x00100000, False, pid)  # SYNCHRONIZE
+        if not handle:
+            return False
+        try:
+            return kernel32.WaitForSingleObject(handle, 0) == 0x00000102  # WAIT_TIMEOUT: still running
+        finally:
+            kernel32.CloseHandle(handle)
+    return os.getppid() == pid
+
+
 def _watch_parent() -> None:
     """When launched by the desktop app, exit if that process disappears (no orphaned API)."""
     import os
@@ -53,7 +71,7 @@ def _watch_parent() -> None:
     def watch() -> None:
         while True:
             time.sleep(2)
-            if os.getppid() != parent:
+            if not _parent_alive(parent):
                 os._exit(0)
 
     threading.Thread(target=watch, name="qal-parent-watch", daemon=True).start()

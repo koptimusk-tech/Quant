@@ -97,3 +97,10 @@ hijo en un puerto local, y la API sirve también el frontend compilado (`QAL_FRO
 escritorio usan exactamente el mismo código. El backend termina si muere el proceso padre
 (`QAL_EXIT_WITH_PARENT`). Datos y base de datos van en el directorio de datos de la aplicación.
 
+## D-020 Backend congelado con PyInstaller (onedir) dentro del instalador
+El instalador lleva `qal-server`, el backend congelado con PyInstaller en modo carpeta (no un solo fichero: el
+modo de un fichero se descomprime en cada arranque y tardaría segundos con pandas, scipy y pyarrow). Se construye
+en cada sistema operativo en GitHub Actions porque PyInstaller no compila de forma cruzada. Pesa unos 475 MB sin
+comprimir, sobre todo por pyarrow y scipy. Se aceptó frente a incluir un intérprete y hacer `pip install` en la
+primera ejecución, que dependería de la red del usuario y de versiones resueltas en su máquina.
+
