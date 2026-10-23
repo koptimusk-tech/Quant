@@ -67,6 +67,8 @@ def create_schedule(body: ScheduleIn, s: Session = Depends(get_session)):
     """Recurring job, e.g. ``ingest_and_scan`` to download new bars automatically and scan them."""
     if body.kind in ("ingest", "ingest_and_scan") and not body.payload.get("items"):
         raise HTTPException(400, "payload.items (list of ingest requests) is required")
+    if body.kind == "scan" and not (body.payload.get("instrument_ids") or body.payload.get("dataset_ids")):
+        raise HTTPException(400, "payload.instrument_ids (scanned at their latest data) is required")
     sch = Schedule(name=body.name, kind=body.kind, payload=body.payload, interval_seconds=body.interval_seconds,
                    enabled=body.enabled, next_run_at=body.start_at or datetime.now(UTC))
     s.add(sch)

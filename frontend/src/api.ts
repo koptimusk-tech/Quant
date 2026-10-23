@@ -235,3 +235,94 @@ export const api = {
   deleteSchedule: (id: string) => request<void>(`/schedules/${id}`, { method: "DELETE" }),
   datasets: () => request<{ id: string; symbol: string }[]>("/datasets"),
 };
+
+// ---- Phase 2: research ---------------------------------------------------------------------
+
+export interface Hypothesis {
+  id: string;
+  family_id: string;
+  version: number;
+  parent_id: string | null;
+  title: string;
+  status: string;
+  contract: Record<string, any>;
+  contract_hash: string;
+  final_test_accesses: number;
+  created_at: string;
+}
+
+export interface GateDecision {
+  id: string;
+  experiment_id: string | null;
+  gate: string;
+  decision: string;
+  reasons: string[];
+  created_at: string;
+}
+
+export interface HypothesisDetail {
+  hypothesis: Hypothesis;
+  experiments: { id: string; kind: string; status: string; created_at: string; error: string | null; decision: string | null; oos_sharpe_net: number | null; contaminated: boolean | null }[];
+  gates: GateDecision[];
+  versions: Hypothesis[];
+}
+
+export interface StrategyInfo {
+  name: string;
+  description: string;
+  n_assets: number;
+  defaults: Record<string, unknown>;
+}
+
+export interface Experiment {
+  id: string;
+  kind: string;
+  hypothesis_id: string | null;
+  status: string;
+  algorithm_version: string;
+  code_version: string;
+  config: Record<string, any>;
+  data_refs: Record<string, any>[];
+  results: Record<string, any>;
+  error: string | null;
+  created_at: string;
+}
+
+export interface DatasetRow {
+  id: string;
+  symbol: string;
+  asset_class: string;
+  provider_id: string;
+  frequency: string;
+  instrument_id: string;
+  is_synthetic: boolean;
+  start_ts: string;
+  end_ts: string;
+  rows: number;
+}
+
+export interface DetectorInfo {
+  name: string;
+  version: string;
+  anomaly_type: string;
+  pairwise: boolean;
+  description: string;
+  defaults: Record<string, unknown>;
+}
+
+export const research = {
+  strategies: () => request<StrategyInfo[]>("/strategies"),
+  detectors: () => request<DetectorInfo[]>("/detectors"),
+  datasets: () => request<DatasetRow[]>("/datasets"),
+  hypotheses: () => request<Hypothesis[]>("/hypotheses"),
+  hypothesis: (id: string) => request<HypothesisDetail>(`/hypotheses/${id}`),
+  create: (contract: Record<string, unknown>, parent_id?: string) =>
+    request<Hypothesis>("/hypotheses", { method: "POST", body: JSON.stringify({ contract, parent_id }) }),
+  validate: (id: string, runAsync = true) =>
+    request<{ job?: Job; experiment?: Experiment }>(`/hypotheses/${id}/validate`, { method: "POST", body: JSON.stringify({ run_async: runAsync }) }),
+  finalTest: (id: string) => request<{ experiment: Experiment }>(`/hypotheses/${id}/final-test?confirm=true`, { method: "POST" }),
+  transition: (id: string, target: string, reason: string) =>
+    request<Hypothesis>(`/hypotheses/${id}/transition`, { method: "POST", body: JSON.stringify({ target, reason }) }),
+  experiment: (id: string) => request<Experiment>(`/experiments/${id}`),
+  experiments: (kind?: string) => request<Experiment[]>(`/experiments${toQuery({ kind, limit: 30 })}`),
+};

@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     # Real order execution is not implemented and stays disabled (principle 8).
     live_trading_enabled: bool = False
 
+    # Built web UI (frontend/dist) served by the API when set; the desktop app uses this.
+    frontend_dist: Path | None = None
+
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from contextlib import asynccontextmanager
 
 from fastapi import APIRouter, Depends, FastAPI, Query
@@ -11,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from qal import __version__
-from qal.api.routers import anomalies, data, jobs, research
+from qal.api.routers import anomalies, data, hypotheses, jobs, research
 from qal.api.schemas import AuditOut
 from qal.config import get_settings
 from qal.db import create_all, get_engine, get_session
@@ -27,6 +28,7 @@ async def lifespan(app: FastAPI):
     get_engine()
     if settings.database_url.startswith("sqlite"):
         create_all()  # dev convenience; PostgreSQL deployments run `alembic upgrade head`
+    _watch_parent()
     worker = None
     if settings.enable_scheduler:
         from qal.jobs.runner import Worker
@@ -36,6 +38,25 @@ async def lifespan(app: FastAPI):
     yield
     if worker:
         worker.stop()
+
+
+def _watch_parent() -> None:
+    """When launched by the desktop app, exit if that process disappears (no orphaned API)."""
+    import os
+    import threading
+    import time
+
+    if not os.environ.get("QAL_EXIT_WITH_PARENT"):
+        return
+    parent = os.getppid()
+
+    def watch() -> None:
+        while True:
+            time.sleep(2)
+            if os.getppid() != parent:
+                os._exit(0)
+
+    threading.Thread(target=watch, name="qal-parent-watch", daemon=True).start()
 
 
 def create_app() -> FastAPI:
@@ -57,10 +78,27 @@ def create_app() -> FastAPI:
     def audit_log(limit: int = Query(100, le=1000), s: Session = Depends(get_session)):
         return s.scalars(select(AuditEvent).order_by(AuditEvent.created_at.desc()).limit(limit)).all()
 
-    for r in (data.router, anomalies.router, research.router, jobs.router):
+    for r in (data.router, anomalies.router, research.router, hypotheses.router, jobs.router):
         v1.include_router(r)
     app.include_router(v1)
+    if settings.frontend_dist and Path(settings.frontend_dist, "index.html").is_file():
+        _mount_frontend(app, Path(settings.frontend_dist))
     return app
+
+
+def _mount_frontend(app: FastAPI, dist: Path) -> None:
+    """Serve the built web UI (used by the desktop app and single-process deployments)."""
+    from fastapi.responses import FileResponse
+    from fastapi.staticfiles import StaticFiles
+
+    app.mount("/assets", StaticFiles(directory=dist / "assets"), name="assets")
+
+    @app.get("/{path:path}", include_in_schema=False)
+    def spa(path: str):
+        f = (dist / path).resolve()
+        if path and f.is_file() and dist.resolve() in f.parents:
+            return FileResponse(f)
+        return FileResponse(dist / "index.html")
 
 
 app = create_app()

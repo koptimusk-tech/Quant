@@ -83,6 +83,8 @@ class IngestBatchIn(BaseModel):
 
 class ScanIn(BaseModel):
     dataset_ids: list[str] = Field(default_factory=list)
+    instrument_ids: list[str] = Field(default_factory=list,
+                                      description="Resolved to each instrument's latest dataset when the scan runs")
     detectors: dict[str, dict[str, Any]] | None = None
     pairs: list[tuple[str, str]] = Field(default_factory=list, description="(dataset_id_y, dataset_id_x)")
     cost_bps: dict[str, float | None] = Field(default_factory=dict)
@@ -96,6 +98,7 @@ class ScanIn(BaseModel):
 class ExperimentOut(ORM):
     id: str
     kind: str
+    hypothesis_id: str | None = None
     status: str
     algorithm_version: str
     code_version: str

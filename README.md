@@ -7,7 +7,7 @@ bajo controles de riesgo estrictos.
 > Las anomalías detectadas son observaciones para investigar, no señales de trading. La plataforma no promete
 > rentabilidad y **no ejecuta órdenes reales** (no existe código de ejecución en esta versión).
 
-Estado: **Fase 0 (diseño) y Fase 1 (MVP de anomalías) completadas.** Ver [ROADMAP.md](ROADMAP.md).
+Estado: **Fases 0, 1 y 2 completadas, con app de escritorio.** Ver [ROADMAP.md](ROADMAP.md).
 
 ## Qué hace hoy
 
@@ -32,6 +32,13 @@ Estado: **Fase 0 (diseño) y Fase 1 (MVP de anomalías) completadas.** Ver [ROAD
   datos usados, explicaciones alternativas) y Data Health (proveedores, frescura, cobertura, huecos, calidad,
   latencia, errores, descargas y programaciones).
 - **Datos sintéticos** claramente etiquetados con anomalías inyectadas conocidas, para probar detectores sin red.
+- **Investigación (Fase 2)**: contratos de hipótesis falsables con criterios de éxito fijados de antemano y congelados
+  (hash), modelo de costes completo, motor de backtesting point-in-time (ejecución en la apertura siguiente),
+  walk-forward con embargo, purged K-fold, test final aislado con contador de accesos, sensibilidad a costes y
+  parámetros, estabilidad por ventana y régimen, bootstrap por bloques, placebo, Deflated Sharpe Ratio, PBO,
+  comprobaciones de leakage y hard gates A–D deterministas que ningún usuario ni agente puede anular.
+- **Pantallas** Tests (elegir, ejecutar y programar pruebas), Quant Research Lab y Backtesting & Validation.
+- **App de escritorio** (Tauri) que arranca el motor local y abre la interfaz. Ver [desktop/README.md](desktop/README.md).
 
 ## Arranque rápido (desarrollo, sin Docker)
 
@@ -112,12 +119,27 @@ make test-frontend                    # tsc + Vitest
 make e2e                              # Playwright: requiere API con demo cargada y `npm run dev`
 ```
 
+## Flujo de investigación
+
+1. *Market Scanner* → abre una anomalía → **Investigate → hypothesis**.
+2. *Research Lab*: completa premisa, mecanismo, reglas, riesgos, invalidación, criterios de éxito y diseño fuera de
+   muestra (ventanas, embargo, inicio del holdout). Al guardar, el contrato queda congelado.
+3. **Run validation**: walk-forward sobre el periodo de investigación, informes de robustez y sobreajuste, y gates.
+   El estado pasa a `VALIDATION_PASSED` o `VALIDATION_FAILED` solo por decisión del motor de políticas.
+4. **Final test** sobre el holdout, una vez al terminar de iterar. Cada acceso se registra; el segundo marca el
+   holdout como contaminado.
+
+Cada validación cuenta como ensayo para el Deflated Sharpe de toda la familia de versiones de la hipótesis.
+Metodología: [docs/RESEARCH.md](docs/RESEARCH.md).
+
 ## Documentación
 
 - [ARCHITECTURE.md](ARCHITECTURE.md): módulos, flujo de datos, modelo de datos, estados.
 - [DECISIONS.md](DECISIONS.md): decisiones de diseño y su justificación.
 - [ROADMAP.md](ROADMAP.md): fases, incluida la app de escritorio.
 - [docs/API.md](docs/API.md): endpoints principales (OpenAPI completo en `/docs`).
+- [docs/RESEARCH.md](docs/RESEARCH.md): contratos, backtesting, validación, gates.
+- [desktop/README.md](desktop/README.md): app de escritorio.
 - [docs/DETECTORS.md](docs/DETECTORS.md): estadísticos, supuestos y limitaciones de cada detector.
 - [docs/DATA_PROVIDERS.md](docs/DATA_PROVIDERS.md): evaluación de proveedores.
 - [docs/RISKS.md](docs/RISKS.md): riesgos identificados en la Fase 0.

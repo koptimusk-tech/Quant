@@ -75,6 +75,7 @@ export default function AnomalyDetailPage() {
         </h1>
         {a.is_synthetic && <SyntheticBadge />}
         <Badge>{a.validation_status}</Badge>
+        <Link to={`/research?anomaly=${a.id}`} className="btn ml-auto">Investigate → hypothesis</Link>
         {d.reproduced ? (
           <Badge tone="green">✓ reproduced from stored data</Badge>
         ) : (

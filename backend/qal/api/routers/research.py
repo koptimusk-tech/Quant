@@ -13,6 +13,7 @@ from qal.config import get_settings
 from qal.data.store import ParquetStore
 from qal.db import get_session
 from qal.jobs.runner import submit_job
+from qal.jobs.tasks import resolve_latest
 from qal.models import Experiment
 
 router = APIRouter(tags=["research"])
@@ -28,12 +29,16 @@ def list_detectors() -> list[dict[str, Any]]:
 def create_scan(body: ScanIn, s: Session = Depends(get_session)) -> dict[str, Any]:
     """Run an anomaly scan (recorded as an experiment). Identical requests return the cached experiment."""
     payload = body.model_dump(exclude={"run_async", "idempotency_key"})
-    if not body.dataset_ids and not body.pairs:
-        raise HTTPException(400, "Provide dataset_ids and/or pairs")
+    if not body.dataset_ids and not body.pairs and not body.instrument_ids:
+        raise HTTPException(400, "Provide dataset_ids, instrument_ids and/or pairs")
     if body.run_async:
         job = submit_job(s, "scan", payload, idempotency_key=body.idempotency_key)
         return {"job": JobOut.model_validate(job).model_dump(mode="json")}
-    cfg = ScanConfig(dataset_ids=body.dataset_ids, detectors=body.detectors or ScanConfig().detectors,
+    try:
+        resolved = resolve_latest(s, body.instrument_ids)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    cfg = ScanConfig(dataset_ids=body.dataset_ids + resolved, detectors=body.detectors or ScanConfig().detectors,
                      pairs=[tuple(p) for p in body.pairs], cost_bps=body.cost_bps,
                      min_dollar_volume=body.min_dollar_volume, label=body.label, force=body.force)
     try:

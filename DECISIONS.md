@@ -68,3 +68,32 @@ validación (Fase 4/5).
 ## D-013 Sin datos simulados ante fallos
 Si un proveedor falla o no está configurado (p. ej. MT5 fuera de Windows) se devuelve un error explícito y se
 registra en `providers.last_error` y en auditoría. Nunca se sustituye por datos sintéticos.
+
+## D-014 Contratos de hipótesis congelados y versionados
+Una hipótesis no se edita (`PATCH` → 409). Cambiarla crea una versión nueva de la misma familia (`family_id`,
+`parent_id`). Así lo que se fijó antes de ver resultados no se puede reescribir a posteriori.
+
+## D-015 Las pruebas se cuentan por familia
+Cada variante de parámetros de cada validación, incluidas las fallidas, suma al número de pruebas de la familia.
+El DSR usa ese recuento total, de modo que reintentar con variantes penaliza la evidencia en lugar de mejorarla.
+
+## D-016 Ejecución a la apertura de la barra siguiente
+La señal calculada con la barra t se ejecuta a la apertura de t+1 (la barra empieza a contar cuando su
+`available_ts` ya ha pasado en todos los activos). Es conservador frente a ejecutar al cierre de t y elimina una
+fuente habitual de look-ahead. Una prueba con una estrategia que mira el futuro comprueba que Gate B la bloquea.
+
+## D-017 Solo el motor de políticas promueve
+`VALIDATION_PASSED` y los estados posteriores solo se alcanzan a través de `evaluate_gates`. La API de
+transiciones manuales rechaza los destinos reservados. Los Gates E y F (riesgo y ejecución) no existen todavía,
+así que `PAPER_TRADING` y posteriores están bloqueados.
+
+## D-018 La validación no se programa
+Los escaneos y descargas se pueden programar; las validaciones no. Repetir validaciones automáticamente sobre la
+misma familia aumentaría pruebas sin una decisión humana detrás y favorecería el p-hacking.
+
+## D-019 Escritorio con Tauri y backend Python como proceso hijo
+Tauri (Rust + WebView del sistema) en lugar de Electron por tamaño y consumo. La app lanza `uvicorn` como proceso
+hijo en un puerto local, y la API sirve también el frontend compilado (`QAL_FRONTEND_DIST`), así que web y
+escritorio usan exactamente el mismo código. El backend termina si muere el proceso padre
+(`QAL_EXIT_WITH_PARENT`). Datos y base de datos van en el directorio de datos de la aplicación.
+
