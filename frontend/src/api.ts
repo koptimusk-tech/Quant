@@ -334,7 +334,21 @@ export interface DetectorInfo {
   defaults: Record<string, unknown>;
 }
 
+export interface Proposal {
+  id: string;
+  kind: "momentum" | "event" | "pair" | string;
+  title: string;
+  why: string;
+  priority: number;
+  evidence: Record<string, unknown>;
+  variants: number;
+  is_synthetic: boolean;
+  existing_hypotheses: { id: string; title: string; status: string; versions_in_family: number }[];
+  contract: Record<string, any>;
+}
+
 export const research = {
+  proposals: () => request<Proposal[]>("/research/proposals"),
   strategies: () => request<StrategyInfo[]>("/strategies"),
   detectors: () => request<DetectorInfo[]>("/detectors"),
   datasets: () => request<DatasetRow[]>("/datasets"),

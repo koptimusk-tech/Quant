@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { contractProblems, readableApiError } from "../pages/Research";
+import { contractProblems, formFromContract, readableApiError } from "../pages/Research";
 
 const ok = {
   title: "EURUSD shock reversal",
@@ -33,5 +33,32 @@ describe("hypothesis form validation", () => {
       "Economic / behavioural premise: String should have at least 40 characters\nHoldout starts: Field required",
     );
     expect(readableApiError("500: boom")).toBe("500: boom");
+  });
+});
+
+describe("suggested hypothesis pre-fill", () => {
+  it("maps a proposed contract onto the form so it passes the same checks", () => {
+    const f = formFromContract({
+      title: "EURUSD 1d: reaction after return shocks",
+      premise: ok.premise,
+      mechanism: ok.mechanism,
+      dataset_ids: ["d1"],
+      features: ["return_shock robust z-score"],
+      strategy: { type: "event", params: { detector: "return_shock", threshold: 4 }, param_grid: { mode: ["reversal", "continuation"], hold_bars: [1, 3, 5] } },
+      entry_rule: ok.entry_rule,
+      exit_rule: ok.exit_rule,
+      horizon_bars: 5,
+      risks: ["a", "b"],
+      invalidation: ["x"],
+      validation: { train_bars: 700, test_bars: 180, embargo_bars: 5, holdout_start: "2023-06-01T00:00:00+00:00" },
+      source_anomaly_ids: ["an1", "an2"],
+    });
+    expect(f.strategy).toBe("event");
+    expect(f.grid).toEqual({ mode: "reversal, continuation", hold_bars: "1, 3, 5" });
+    expect(f.fixed).toEqual({ detector: "return_shock", threshold: "4" });
+    expect(f.holdout_start).toBe("2023-06-01");
+    expect(f.risks).toBe("a\nb");
+    expect(f.train_bars).toBe("700");
+    expect(contractProblems(f)).toEqual([]);
   });
 });
