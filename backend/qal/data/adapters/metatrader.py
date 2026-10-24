@@ -64,6 +64,30 @@ class MetaTrader5Adapter(DataAdapter):
         self._mt5 = mt5
         return mt5
 
+    def _fetch_chunks(self, mt5: Any, symbol: str, timeframe: Any, start: datetime, end: datetime,
+                      frequency: str) -> list[pd.DataFrame]:
+        """copy_rates_range in windows, newest first.
+
+        One call over a long intraday range fails with "Invalid params" (seen at about 71k H1 bars), so the range
+        is split. When an older window returns nothing after newer ones succeeded, the terminal's history ends
+        there: stop and keep what was read (``self.last_fetch_note`` says where it stopped).
+        """
+        days = float(self.config.get("chunk_days", 3650 if frequency in ("1d", "1wk") else 365))
+        frames: list[pd.DataFrame] = []
+        self.last_fetch_note = ""
+        hi = end
+        while hi > start:
+            lo = max(start, hi - timedelta(days=days))
+            rates = mt5.copy_rates_range(symbol, timeframe, lo, hi)
+            if rates is None or len(rates) == 0:
+                if not frames:
+                    raise ProviderError(f"MT5 returned no bars for {symbol}: {mt5.last_error()}")
+                self.last_fetch_note = f"terminal returned no bars before {hi:%Y-%m-%d}: {mt5.last_error()}"
+                break
+            frames.append(pd.DataFrame(rates))
+            hi = lo
+        return frames
+
     def _fetch(self, req: FetchRequest) -> pd.DataFrame:
         mt5 = self._module()
         init_kwargs = {k: v for k, v in {
@@ -79,12 +103,11 @@ class MetaTrader5Adapter(DataAdapter):
                 raise ProviderError(f"MT5 symbol not available: {req.instrument.symbol}")
             start = req.start or datetime.now(UTC) - timedelta(days=365 * 5)
             end = req.end or datetime.now(UTC)
-            rates = mt5.copy_rates_range(req.instrument.symbol, getattr(mt5, _TF_NAMES[req.frequency]), start, end)
-            if rates is None or len(rates) == 0:
-                raise ProviderError(f"MT5 returned no bars for {req.instrument.symbol}: {mt5.last_error()}")
+            frames = self._fetch_chunks(mt5, req.instrument.symbol, getattr(mt5, _TF_NAMES[req.frequency]),
+                                        start, end, req.frequency)
         finally:
             mt5.shutdown()
-        df = pd.DataFrame(rates)
+        df = pd.concat(frames, ignore_index=True).drop_duplicates("time").sort_values("time")
         offset = float(self.config.get("server_utc_offset_hours", req.options.get("server_utc_offset_hours", 0)))
         df["ts"] = pd.to_datetime(df["time"], unit="s", utc=True) - pd.Timedelta(hours=offset)
         vol = "real_volume" if "real_volume" in df and df["real_volume"].sum() > 0 else "tick_volume"

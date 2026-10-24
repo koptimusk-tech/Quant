@@ -501,7 +501,8 @@ def run_event_study(session: Session, dataset_id: str, detector: str, *, store: 
               "params": DETECTORS[detector](**params).params, "horizons": horizons, "seed": seed,
               "cost_scenarios": [asdict(s) for s in scenarios],
               "spread": None if spread_bps is None else {"source": spread_source,
-                                                         "hash": stable_hash(spread_bps.round(6).to_dict())}}
+                                                         "hash": stable_hash([[str(t), v] for t, v in
+                                                                             spread_bps.round(6).items()])}}
     algo = f"event_study@{VERSION}+{detector}@{DETECTORS[detector].version}"
     data_hashes = [ds.content_hash] + ([rel.content_hash] if rel else [])
     config_hash = stable_hash({"config": config, "data": data_hashes, "algo": algo})
