@@ -601,7 +601,35 @@ export interface FactorModule {
   universes: { symbols: string[]; common_bars: number; asset_class: string; frequency: string }[];
 }
 
+export interface WorthItem {
+  key: string;
+  title: string;
+  route: string;
+  family: string;
+  dataset_ids: string[];
+  origin_observation: string;
+  detector: string | null;
+  strategy: string;
+  priority: number;
+  score: number | null;
+  verdict: "worth_testing" | "already_tested" | "not_worth" | "not_testable";
+  verdict_label: string;
+  reasons: string[];
+  refuted_if: string[];
+  objections: { code: string; severity: string; message: string }[];
+  existing: { id: string; title: string; status: string }[];
+}
+
+export interface WorthTesting {
+  counts: Record<string, number>;
+  items: WorthItem[];
+  data_gaps: { key: string; family: string; reason: string }[];
+  notes: string[];
+}
+
 export const alpha = {
+  worthTesting: (includeSynthetic = false, datasetId?: string) =>
+    request<WorthTesting>(`/alpha/worth-testing${toQuery({ include_synthetic: includeSynthetic, dataset_id: datasetId })}`),
   factors: (includeSynthetic = false) => request<FactorModule[]>(`/alpha/factors${toQuery({ include_synthetic: includeSynthetic })}`),
   runs: () => request<AlphaRun[]>("/alpha/runs"),
   run: (id: string) => request<{ run: AlphaRun; messages: AgentMessage[] }>(`/alpha/runs/${id}`),

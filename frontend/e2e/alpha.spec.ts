@@ -5,6 +5,8 @@ test("run a research cycle and inspect a hypothesis", async ({ page }) => {
   test.setTimeout(120_000);
   await page.goto("/alpha");
   await expect(page.getByRole("heading", { name: "Alpha Research" })).toBeVisible();
+  await expect(page.getByText("Which anomalies are worth testing?")).toBeVisible();
+  await expect(page.getByText(/worth testing · \d+ already tested/)).toBeVisible();
   await page.getByLabel("include synthetic data").check();
   await page.getByLabel("Max experiments").fill("1");
   await page.getByRole("button", { name: "Run research cycle" }).click();

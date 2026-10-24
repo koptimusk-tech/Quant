@@ -37,12 +37,27 @@ const detail = {
   predictive_evidence: row.predictive_evidence, validated_net_profitability: row.validated_net_profitability,
 };
 
+const worthItem = (key: string, title: string, verdict: string, verdict_label: string, reasons: string[], score: number | null) => ({
+  key, title, verdict, verdict_label, reasons, score, route: "anomaly", family: "momentum", dataset_ids: ["d1"],
+  origin_observation: "obs " + key, detector: null, strategy: "ts_momentum", priority: 0.3, refuted_if: [], objections: [], existing: [],
+});
+const worth = {
+  counts: { worth_testing: 1, already_tested: 0, not_worth: 1, not_testable: 0 },
+  items: [
+    worthItem("a", "GBPUSD 1d: time-series momentum", "worth_testing", "Worth testing", ["No blocking objection and no earlier study refuted it."], 0.3),
+    worthItem("b", "EURUSD 1h: reversal after return shocks", "not_worth", "Not worth testing", ["an earlier event study found no out-of-sample evidence"], null),
+  ],
+  data_gaps: [],
+  notes: ["Read-only: nothing was registered or backtested to build this list."],
+};
+
 function mockFetch() {
   const calls: { url: string; method: string; body?: string }[] = [];
   vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
     calls.push({ url, method: init?.method ?? "GET", body: init?.body as string | undefined });
     let body: unknown = [];
-    if (url === "/api/v1/alpha/runs" && init?.method === "POST") body = { job: { id: "j1" } };
+    if (url.startsWith("/api/v1/alpha/worth-testing")) body = worth;
+    else if (url === "/api/v1/alpha/runs" && init?.method === "POST") body = { job: { id: "j1" } };
     else if (url === "/api/v1/alpha/runs") body = [run];
     else if (url.startsWith("/api/v1/alpha/runs/")) body = { run, messages: [{ ...detail.messages[0], kind: "data_gap", payload: { family: "factor", reason: "Value: No point-in-time fundamentals" } }] };
     else if (url === "/api/v1/alpha/hypotheses") body = [row];
@@ -69,6 +84,15 @@ describe("Alpha Research", () => {
     expect(screen.getByText("VALIDATION_FAILED")).toBeInTheDocument();
     expect(screen.getByText(/2 major/)).toBeInTheDocument();
     expect(await screen.findByText(/Value: No point-in-time fundamentals/)).toBeInTheDocument();
+  });
+
+  it("says which anomalies are worth testing and why the rest are not", async () => {
+    mockFetch();
+    render(<MemoryRouter><AlphaResearchPage /></MemoryRouter>);
+    expect(await screen.findByText("GBPUSD 1d: time-series momentum")).toBeInTheDocument();
+    expect(screen.getByText("Worth testing")).toBeInTheDocument();
+    expect(screen.getByText("Not worth testing (1)")).toBeInTheDocument();
+    expect(screen.getByText("an earlier event study found no out-of-sample evidence")).toBeInTheDocument();
   });
 
   it("launches a bounded research cycle", async () => {

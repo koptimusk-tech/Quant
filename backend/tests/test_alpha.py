@@ -281,3 +281,41 @@ def test_api_runs_hypotheses_and_paper_eligibility(env, tmp_path):
         assert c.post(f"/api/v1/alpha/hypotheses/{untested['id']}/experiments").status_code == 202
         assert process_once() == 1
         assert c.get(f"/api/v1/alpha/hypotheses/{untested['id']}").json()["validations"]
+
+
+def test_worth_testing_is_read_only_and_explains_each_verdict(env, session, tmp_path):
+    from qal.alpha.advisor import worth_testing
+
+    ids = _universe(session, env, tmp_path)
+    n_exp = session.query(Experiment).count()
+    w = worth_testing(session)
+    assert session.query(Experiment).count() == n_exp and session.query(Hypothesis).count() == 0
+    by = {x["title"]: x for x in w["items"]}
+    assert by["EURUSD 1d: time-series momentum"]["verdict"] == "worth_testing"
+    shocks = [x for x in w["items"] if x["detector"] == "return_shock"]
+    assert shocks and all(x["verdict"] == "not_worth" and "insufficient evidence" in x["reasons"][0] for x in shocks)
+    assert all(x["reasons"] for x in w["items"])
+    # Worth-testing items come first, ranked by score.
+    order = [x["verdict"] for x in w["items"]]
+    assert order == sorted(order, key=lambda v: ["worth_testing", "already_tested", "not_worth",
+                                                 "not_testable"].index(v))
+    scores = [x["score"] for x in w["items"] if x["verdict"] == "worth_testing"]
+    assert scores == sorted(scores, reverse=True)
+    assert any("no relationship scan" in n.lower() for n in w["notes"])
+
+    # An earlier out-of-sample study that found nothing removes the idea from the queue.
+    session.add(Experiment(kind="event_study", status="succeeded", algorithm_version="x", code_version="x",
+                           config={"dataset_id": ids["EURUSD"], "detector": "volatility_regime"}, config_hash="x",
+                           results={"verdict": "no_evidence", "verdict_text": "nothing out of sample"}))
+    session.flush()
+    regime = [x for x in worth_testing(session, dataset_id=ids["EURUSD"])["items"] if x["family"] == "volatility"]
+    assert regime and all(x["verdict"] == "not_worth" and "no out-of-sample evidence" in x["reasons"][0]
+                          for x in regime)
+
+    # After a cycle, what was tested is reported with its outcome instead of being proposed again.
+    agents.ResearchCoordinator().run_cycle(session, Budget(max_experiments=2))
+    w2 = worth_testing(session)
+    tested = [x for x in w2["items"] if x["verdict"] == "already_tested"]
+    assert len(tested) == 2 and all("VALIDATION_" in x["reasons"][0] for x in tested)
+    assert w2["relationship_scan"] is not None
+    assert any(x["verdict"] == "worth_testing" and x["existing"] for x in w2["items"])  # registered, not run yet

@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from qal.alpha.advisor import worth_testing
 from qal.alpha.factors import factor_status
 from qal.alpha.messages import Budget
 from qal.alpha.report import (
@@ -38,6 +39,13 @@ class CycleIn(BaseModel):
 def factors(include_synthetic: bool = False, s: Session = Depends(get_session)) -> list[dict[str, Any]]:
     """Factor modules with their definition and whether the lab can test them (and on which universe)."""
     return factor_status(s, include_synthetic)
+
+
+@router.get("/worth-testing")
+def get_worth_testing(include_synthetic: bool = False, dataset_id: str | None = None,
+                      s: Session = Depends(get_session)) -> dict[str, Any]:
+    """Which anomalies and ideas are worth testing now, and why; read-only (nothing is registered or run)."""
+    return worth_testing(s, include_synthetic, dataset_id)
 
 
 @router.post("/runs", status_code=202)

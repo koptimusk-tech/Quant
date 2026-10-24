@@ -14,10 +14,43 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { api, type AnomalyDetail, type EventStudy } from "../api";
+import { alpha, api, type AnomalyDetail, type EventStudy, type WorthItem } from "../api";
+import { VerdictBadge } from "./AlphaResearch";
 import { DEFINITIONS, EventStudyView, PriorityBadge, ScoreExplanations, SignificanceBadge, StageBadge } from "../components/scores";
 import { Badge, ErrorBox, KV, QualityBadge, ScoreBar, Section, SyntheticBadge, fmt, fmtTs } from "../components/ui";
 import { chartColors } from "../components/theme";
+
+const FROM_DETECTOR: Record<string, (x: WorthItem) => boolean> = {
+  return_shock: (x) => x.detector === "return_shock",
+  volatility_regime: (x) => x.family === "volatility",
+  pair_divergence: (x) => x.strategy === "pair_mean_reversion",
+};
+
+function WorthForAnomaly({ datasetId, detector, synthetic }: { datasetId: string; detector: string; synthetic: boolean }) {
+  const [items, setItems] = useState<WorthItem[] | null>(null);
+  useEffect(() => {
+    alpha.worthTesting(synthetic, datasetId).then((w) => setItems(w.items.filter(FROM_DETECTOR[detector] ?? (() => false))), () => setItems([]));
+  }, [datasetId, detector, synthetic]);
+  return (
+    <Section title="Is this anomaly type worth testing?">
+      {items === null ? (
+        <p className="text-sm text-slate-500">Reviewing…</p>
+      ) : items.length ? (
+        <ul className="space-y-2 text-sm">
+          {items.map((x) => (
+            <li key={x.key}>
+              <VerdictBadge item={x} /> {x.title}
+              <ul className="list-disc pl-5">{x.reasons.map((r) => <li key={r}>{r}</li>)}</ul>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-sm text-slate-500">No testable idea comes from this anomaly type on this dataset.</p>
+      )}
+      <Link className="text-xs underline" to="/alpha#worth">All recommendations →</Link>
+    </Section>
+  );
+}
 
 const day = (ts: string) => ts.slice(0, 16).replace("T", " ");
 
@@ -270,6 +303,7 @@ export default function AnomalyDetailPage() {
         <Section title="Data quality at detection">
           <KV data={a.data_quality} />
         </Section>
+        <WorthForAnomaly datasetId={a.dataset_id} detector={a.detector} synthetic={a.is_synthetic} />
         <Section title="Related hypotheses and research stage">
           <p className="mb-2 text-sm"><StageBadge stage={a.stage} /></p>
           {d.related_hypotheses.length ? (
