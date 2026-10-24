@@ -66,6 +66,9 @@ Portfolio Construction, Hierarchical Risk Manager con límites deterministas por
 portfolio, hard gates B–F, simulación de órdenes y paper trading sin credenciales reales, monitorización de
 degradación y alertas. Pantallas Portfolio & Risk y Paper Trading.
 
+Estado: portfolio y risk manager implementados; paper trading simulado implementado (docs/PAPER_TRADING.md).
+Pendiente: monitorización continua de degradación y deriva, y los criterios del Gate E.
+
 ## Fase 7 — DRL y ejecución real opcional
 Interfaz experimental DRL/LLM-RL fuera del camino crítico. Adaptadores de ejecución en un servicio separado,
 deshabilitados por defecto, con autorización explícita (Gate F), límites independientes y pruebas de seguridad.

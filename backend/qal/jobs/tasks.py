@@ -153,8 +153,21 @@ def handle_portfolio_proposals(session: Session, payload: dict[str, Any], actor:
     return {"experiment_id": exp.id, "status": exp.status}
 
 
+def handle_paper_run(session: Session, payload: dict[str, Any], actor: str) -> dict[str, Any]:
+    """payload: {"session_id", "max_bars"}. Processes bars of a running paper session (simulation only).
+
+    A schedule with this kind moves a new-data session forward after each ingestion."""
+    from qal.paper import engine
+    from qal.paper.service import get
+
+    ps = get(session, payload["session_id"])
+    out = engine.run(session, ps, int(payload.get("max_bars", 5000)))
+    session.commit()
+    return out
+
+
 HANDLERS = {"ingest": handle_ingest, "scan": handle_scan, "ingest_and_scan": handle_ingest_and_scan,
             "validate": handle_validate, "alpha_cycle": handle_alpha_cycle,
             "model_experiment": handle_model_experiment, "portfolio_run": handle_portfolio_run,
-            "portfolio_proposals": handle_portfolio_proposals}
+            "portfolio_proposals": handle_portfolio_proposals, "paper_run": handle_paper_run}
 __all__ = ["HANDLERS", "latest_dataset"]

@@ -44,7 +44,8 @@ desktop/                   Tauri 2: lanza el backend como proceso hijo y muestra
 Los módulos de fases posteriores (Portfolio and Risk Engine, Agent Orchestrator, Alerting) se añadirán como paquetes hermanos
 (`qal/risk`, `qal/agents`, `qal/alerts`). No se separan en
 microservicios mientras no haya una necesidad de escalado o aislamiento concreta; la excepción prevista es el
-servicio de ejecución (Fase 7), que irá en un proceso aparte con sus propias credenciales (DECISIONS D-008).
+servicio de ejecución real, que irá en un proceso aparte con sus propias credenciales (DECISIONS D-008). El paquete
+`qal/paper` es solo simulación: no contiene clientes de brokers y un test impide que los importe.
 
 ## Flujo de datos (Fase 1)
 
@@ -85,7 +86,9 @@ Los trabajos (`ingest`, `scan`, `ingest_and_scan`) se ejecutan en un hilo de fon
 Migraciones: `backend/migrations` (Alembic). `tests/test_migrations.py` comprueba que la migración produce
 exactamente el esquema ORM.
 
-Entidades previstas en fases siguientes: Strategy Versions, Risk Policies, Agent Runs, Paper Orders, Portfolio Positions, Features (catálogo).
+Entidades añadidas después: Risk Policies y Risk Decisions (portfolio y riesgo), y las tablas de paper trading simulado
+(`paper_sessions`, `paper_signals`, `paper_orders`, `paper_fills`, `paper_positions`, `paper_ledger`, `paper_equity`,
+`paper_events`; ver [docs/PAPER_TRADING.md](docs/PAPER_TRADING.md)). Previstas: Strategy Versions, Agent Runs, Features (catálogo).
 
 ## Estados de investigación
 

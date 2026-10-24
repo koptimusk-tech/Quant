@@ -65,7 +65,7 @@ def test_states_reserve_promotions_for_policy_engine():
         check_transition("BACKTEST_PENDING", "VALIDATION_PASSED", "agent")
     with pytest.raises(TransitionError, match="Gate F"):
         check_transition("LIVE_ELIGIBLE", "LIVE_ENABLED", "policy")
-    with pytest.raises(TransitionError, match="Phase 6"):
+    with pytest.raises(TransitionError, match="Gate E criteria"):
         check_transition("VALIDATION_PASSED", "PAPER_TRADING", "policy")
     check_transition("VALIDATION_FAILED", "REJECTED", "user")
 
