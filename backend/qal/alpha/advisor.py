@@ -21,7 +21,12 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from qal.alpha.agents import AdversarialReviewer, AlphaResearcher, QuantAnalyst, build_context
+from qal.alpha.agents import (
+    AdversarialReviewer,
+    AlphaResearcher,
+    QuantAnalyst,
+    build_context,
+)
 from qal.alpha.messages import Budget, DataGap
 from qal.models import Experiment
 

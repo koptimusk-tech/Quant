@@ -8,6 +8,7 @@
     python -m qal.cli worker                   # run jobs and schedules without the API
     python -m qal.cli predictive-study --out runs   # event studies on the real EURUSD/USDCHF datasets
     python -m qal.cli alpha-cycle --out alpha_runs  # one bounded cycle of the research agents
+    python -m qal.cli model-lab --frequency 1d --benchmark --out model_runs  # compare anomaly models
 """
 
 from __future__ import annotations
@@ -130,6 +131,40 @@ def cmd_alpha_cycle(args: argparse.Namespace) -> None:
         print(json.dumps(detail["run"], indent=2, default=str))
 
 
+def cmd_model_lab(args: argparse.Namespace) -> None:
+    from qal.research.model_lab import as_config, run_comparison
+
+    create_all()
+    with session_scope() as s:
+        if args.datasets:
+            ids = args.datasets
+        else:  # the latest real dataset of every instrument at the requested frequencies
+            q = select(Dataset).where(Dataset.is_latest.is_(True), Dataset.is_synthetic.is_(args.synthetic))
+            ids = [d.id for d in s.scalars(q) if not args.frequency or d.frequency in args.frequency]
+        body = {"dataset_ids": sorted(ids), "predictive": not args.no_predictive, "benchmark": args.benchmark,
+                "max_seconds": args.max_seconds, "label": args.label, "seeds": args.seeds, "force": args.force}
+        if args.models:
+            body["models"] = [{"detector": m} for m in args.models]
+        exp = run_comparison(s, as_config(body), store=ParquetStore(get_settings().data_dir), actor="cli",
+                             checkpoint=s.commit)
+        s.commit()
+        record = {"id": exp.id, "status": exp.status, "error": exp.error, "config": exp.config,
+                  "data_refs": exp.data_refs, "results": exp.results}
+        if args.out:
+            out = Path(args.out) / f"models_{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}"
+            out.mkdir(parents=True, exist_ok=True)
+            (out / "model_comparison.json").write_text(json.dumps(record, indent=2, default=str))
+            print(f"written {out / 'model_comparison.json'}")
+        for d in exp.results.get("datasets", []):
+            for r in d.get("rows", []) or [{"model": "-", "status": d.get("status"), "reason": d.get("reason")}]:
+                pred = r.get("predictive") or {}
+                print(f"{d['symbol']:>8} {d['frequency']:>3} {r['model']:<22} {r['status']:<14} "
+                      f"flags={r.get('n_flagged')} episodes={r.get('n_episodes')} rate={r.get('flag_rate')} "
+                      f"oos={pred.get('verdict')} {r.get('reason') or ''}")
+        print(json.dumps({"id": exp.id, "status": exp.status, "duration_s": exp.results.get("duration_s"),
+                          "budget_exhausted": exp.results.get("budget_exhausted", False)}))
+
+
 def cmd_worker(args: argparse.Namespace) -> None:
     from qal.jobs.runner import process_once
 
@@ -188,6 +223,20 @@ def main() -> None:
     ac.add_argument("--costs", help="JSON file {symbol: cost model} with the account's real costs")
     ac.add_argument("--out", default="alpha_runs", help="directory for the full JSON report; empty to skip")
     ac.set_defaults(fn=cmd_alpha_cycle)
+    ml = sub.add_parser("model-lab", help="compare anomaly models (Isolation Forest, LOF, baselines) on datasets")
+    ml.add_argument("--datasets", nargs="*", help="dataset ids (default: latest real dataset of each instrument)")
+    ml.add_argument("--frequency", nargs="*", help="only these frequencies, e.g. 1d 1h")
+    ml.add_argument("--synthetic", action="store_true", help="use synthetic datasets instead of real ones")
+    ml.add_argument("--models", nargs="*", help="detector names (default: isolation_forest, local_outlier_factor, "
+                                                "return_shock, volatility_regime)")
+    ml.add_argument("--seeds", nargs="*", type=int, default=[0, 1, 2])
+    ml.add_argument("--no-predictive", action="store_true")
+    ml.add_argument("--benchmark", action="store_true", help="also run the synthetic known-anomaly benchmark")
+    ml.add_argument("--max-seconds", type=float, default=3600)
+    ml.add_argument("--label", default="cli")
+    ml.add_argument("--force", action="store_true", help="recompute even if an identical comparison is stored")
+    ml.add_argument("--out", default=None)
+    ml.set_defaults(fn=cmd_model_lab)
     args = p.parse_args()
     args.fn(args)
 

@@ -23,7 +23,7 @@ Base: `/api/v1`. Especificación completa OpenAPI en `/api/v1/openapi.json` y UI
 | POST | `/event-studies` | `{dataset_id, detector, related_dataset_id?, horizons?, seed?}`: evaluación predictiva v2 del tipo de anomalía (exceso sobre benchmark causal, IC, BH, fuera de muestra purgado, walk-forward, escenarios de coste; pares con `related_dataset_id`). |
 | GET | `/event-studies/{id}` | Resultado guardado de un estudio de eventos. |
 | GET/POST/DELETE | `/saved-queries` | Consultas guardadas. |
-| GET/POST | `/jobs` · GET `/jobs/{id}` · POST `/jobs/{id}/cancel` | Trabajos (`ingest`, `scan`, `ingest_and_scan`, `validate`, `alpha_cycle`). |
+| GET/POST | `/jobs` · GET `/jobs/{id}` · POST `/jobs/{id}/cancel` | Trabajos (`ingest`, `scan`, `ingest_and_scan`, `validate`, `alpha_cycle`, `model_experiment`). Cancelar un trabajo en cola lo cancela al momento; uno en ejecución pasa a `cancelling` y `model_experiment` se detiene entre unidades de trabajo conservando los resultados parciales (los demás tipos terminan). |
 | GET/POST/PATCH/DELETE | `/schedules` | Programaciones periódicas (mínimo 60 s). |
 | GET | `/audit` | Eventos de auditoría. |
 | GET | `/strategies` | Tipos de estrategia, parámetros y número de activos. |
@@ -41,6 +41,11 @@ Base: `/api/v1`. Especificación completa OpenAPI en `/api/v1/openapi.json` y UI
 | GET | `/alpha/relationships/{id}` | Resultado completo de una búsqueda de relaciones (todas las parejas y todas las pruebas). |
 | GET | `/alpha/hypotheses` · `/alpha/hypotheses/{id}` | Hipótesis con origen, objeciones y, por separado, prioridad de investigación, evidencia predictiva y rentabilidad neta validada; el detalle compara experimentos y explica cada decisión. |
 | POST | `/alpha/hypotheses/{id}/experiments` | Encola una validación del contrato congelado. |
+| GET | `/models/detectors` | Detectores de una serie que el Model Lab puede comparar: parámetros, valores por defecto, si son multivariantes y si la semilla cambia el resultado. |
+| GET | `/models/features` | Catálogo de características: fórmula, fuente, ventana, disponibilidad, valores ausentes, supuestos y sesgos. |
+| POST | `/models/experiments` | `{dataset_ids, models: [{detector, params, label}], seeds, window_variants, predictive, horizons, max_seconds, benchmark, label, run_async}`: compara modelos (trabajo `model_experiment`). Errores de configuración → 400. Una petición idéntica reutiliza el experimento guardado. |
+| GET | `/models/experiments` · `/models/experiments/{id}` | Comparaciones guardadas (tipo `model_comparison`), con todas las medidas por dataset × modelo. |
+| GET | `/models/experiments/{id}/export.csv` | Una fila por dataset × modelo. |
 | GET/POST | `/alpha/hypotheses/{id}/paper-eligibility` | Requisitos para `PAPER_TRADING_ELIGIBLE` y aprobación explícita de una persona con límites de riesgo. No envía órdenes. |
 
 Ejemplo de escaneo con un par:

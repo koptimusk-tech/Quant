@@ -639,3 +639,147 @@ export const alpha = {
   hypothesis: (id: string) => request<AlphaHypothesisDetail>(`/alpha/hypotheses/${id}`),
   experiment: (id: string) => request<{ job: Job }>(`/alpha/hypotheses/${id}/experiments`, { method: "POST" }),
 };
+
+// ---- Phase 5: Model Lab --------------------------------------------------------------------
+
+export interface ModelDetector {
+  name: string;
+  version: string;
+  anomaly_type: string;
+  description: string;
+  defaults: Record<string, unknown>;
+  stochastic: boolean;
+  multivariate: boolean;
+}
+
+export interface FeatureInfo {
+  name: string;
+  group: string;
+  formula: string;
+  source: string;
+  window: string;
+  availability: string;
+  missing: string;
+  assumptions: string;
+  biases: string;
+  needs: string[];
+}
+
+export interface Overlap {
+  jaccard: number | null;
+  share_a_in_b: number | null;
+  share_b_in_a: number | null;
+}
+
+export interface ModelRow {
+  model: string;
+  detector: string;
+  status: "ok" | "not_applicable" | "failed";
+  reason?: string;
+  error?: string;
+  params: Record<string, unknown>;
+  runtime_s?: number;
+  n_scored?: number;
+  n_flagged?: number;
+  n_episodes?: number;
+  flag_rate?: number | null;
+  nominal_rate?: number | null;
+  n_bh_significant?: number;
+  per_year?: { year: number; bars: number; flags: number; rate: number }[];
+  rate_cv_across_years?: number | null;
+  per_regime?: {
+    high_vol: { bars: number; flags: number; rate: number | null };
+    low_vol: { bars: number; flags: number; rate: number | null };
+    high_to_low_ratio: number | null;
+  };
+  stability?: {
+    seeds: { jaccard_mean?: number | null; runs?: ({ seed: number } & Overlap)[]; note?: string };
+    window_variants: ({ variant: string; n_flagged?: number; not_applicable?: string } & Partial<Overlap>)[];
+  };
+  top_feature_counts?: Record<string, number>;
+  features_dropped?: Record<string, string>;
+  flags?: { ts: string; close: number; p: number; stat: number }[];
+  predictive?: {
+    verdict?: string;
+    verdict_text?: string;
+    error?: string;
+    n_events?: number;
+    selected?: { horizon: number; rule: string } | null;
+    out_of_sample?: { n?: number; mean_excess_bps?: number; ci95_excess_bps?: number[]; pvalue_one_sided?: number; mean_net_bps?: number };
+    oos_run_wide_adjusted_pvalue?: number;
+  };
+}
+
+export interface ModelDataset {
+  dataset_id: string;
+  symbol: string;
+  frequency: string;
+  quality_status: string;
+  is_synthetic: boolean;
+  status: "ok" | "skipped";
+  reason?: string;
+  n_bars?: number;
+  truncated_to_last_bars?: number;
+  rows?: ModelRow[];
+  overlap?: { models: string[]; matrix: (Overlap | null)[][] };
+  chart?: { ts: string[]; close: number[]; step: number };
+}
+
+export interface BenchmarkRow {
+  model: string;
+  detector: string;
+  recall_scored: number | null;
+  nominal_rate: number | null;
+  control_false_alarms: { scored?: number; flags?: number; rate?: number; episodes?: number; not_applicable?: string };
+  events: { symbol: string; kind: string; bar: number; description: string; scored: boolean; detected: boolean; delay_bars: number | null }[];
+}
+
+export interface ModelComparisonSummary {
+  id: string;
+  status: string;
+  created_at: string;
+  finished_at: string | null;
+  label: string;
+  models: string[];
+  datasets: string[];
+  is_synthetic: boolean | null;
+  benchmark: boolean;
+  duration_s: number | null;
+  budget_exhausted: boolean;
+  error: string | null;
+}
+
+export interface ModelComparison extends ModelComparisonSummary {
+  config: Record<string, any>;
+  results: {
+    datasets: ModelDataset[];
+    limitations: string[];
+    synthetic_benchmark?: { rows?: BenchmarkRow[]; note?: string; skipped?: string; n_bars?: number };
+    budget_exhausted?: boolean;
+    duration_s?: number;
+  };
+}
+
+export interface ComparisonRequest {
+  dataset_ids: string[];
+  models: { detector: string; params?: Record<string, unknown>; label?: string }[];
+  seeds?: number[];
+  horizons?: number[];
+  predictive?: boolean;
+  benchmark?: boolean;
+  max_seconds?: number;
+  label?: string;
+}
+
+export const models = {
+  detectors: () => request<ModelDetector[]>("/models/detectors"),
+  features: () => request<{ default: string[]; features: FeatureInfo[] }>("/models/features"),
+  experiments: () => request<ModelComparisonSummary[]>("/models/experiments"),
+  experiment: (id: string) => request<ModelComparison>(`/models/experiments/${id}`),
+  run: (body: ComparisonRequest) =>
+    request<{ job: Job }>("/models/experiments", { method: "POST", body: JSON.stringify(body) }),
+  jobs: () => request<Job[]>("/jobs?limit=50"),
+  cancel: (jobId: string) => request<Job>(`/jobs/${jobId}/cancel`, { method: "POST" }),
+  csvUrl: (id: string) => `${BASE}/models/experiments/${id}/export.csv`,
+  jsonUrl: (id: string) => `${BASE}/models/experiments/${id}`,
+};

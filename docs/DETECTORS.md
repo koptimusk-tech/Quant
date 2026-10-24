@@ -1,4 +1,4 @@
-# Detectores y características (Fase 1)
+# Detectores y características
 
 Todos los detectores son deterministas, versionados (`name@version`) y causales: el estadístico en la barra t usa
 barras ≤ t y líneas base que terminan en t-1. Los parámetros por defecto se exponen en `GET /api/v1/detectors`.
@@ -150,6 +150,57 @@ combinaciones del lote y sobre las p fuera de muestra, y escribe `results.json`,
 ≥ 50 % de las barras y sus cierres coinciden con los del dataset en el mismo instante (si no, suele ser un desfase
 horario y se rechaza).
 
+## Modelos multivariantes (Fase 5): `isolation_forest`, `local_outlier_factor` (`multivariate_outlier`)
+
+Código: `qal/anomaly/ml.py`, características en `qal/features/catalog.py` (catálogo documentado, también en
+`GET /api/v1/models/features` y en la página Model Lab).
+
+**Características.** Cada valor en la barra t usa solo barras ≤ t. Las ventanas móviles exigen el 80 % de sus
+observaciones, de modo que un hueco aislado de precios deja NaN solo en las filas afectadas. Por defecto:
+`ret_1, ret_5, rel_vol, ret_robust_z, range_rel, gap, kurt_60, autocorr_60`. `rel_volume` se descarta (con el motivo)
+si el volumen cubre menos del 80 % de las barras o es constante, como ocurre con el volumen de ticks de MT5; las
+variables de hora solo se usan en barras intradía. No se aplican transformaciones de estacionariedad indiscriminadas:
+se usan retornos, ratios y z-scores frente al pasado reciente.
+
+**Ajuste walk-forward.** En cada punto de reajuste t0 (cada `refit_every` barras; 0 = `max(25, train_window/20)`,
+nunca dependiente de la longitud de la serie) se estiman con las `train_window` barras anteriores: la escala robusta
+(mediana/MAD), el modelo (con los dos primeros tercios de la ventana) y la distribución de referencia de las
+puntuaciones (con el último tercio, que el modelo no ha visto). Las `refit_every` barras siguientes se puntúan con
+ese modelo. Las pruebas de truncado y de futuro envenenado lo verifican.
+
+**La puntuación no es una probabilidad.** Cada barra recibe un p-valor empírico frente a la referencia:
+`(1 + #{ref > s} + #{ref = s}/2) / (n_ref + 1)`; se marca si p ≤ `contamination` (0,01 por defecto), así que
+`contamination` es la proporción esperada de barras marcadas en un mercado estable. Los p-valores entran en la
+corrección Benjamini-Hochberg del escaneo como los demás. Cada detección indica las tres características más
+extremas (z robusto) y la dirección es el signo del retorno de la barra: el modelo dice que la barra es rara, no hacia
+dónde irá el precio.
+
+**Calibración medida** (series de control sintéticas, 3000 barras, 4 semillas): Isolation Forest marca un 1,1–1,2 %
+con un nominal del 1 %; LOF marca un 2 % aproximadamente (su estimación de densidad deriva con las características
+móviles). Un evento produce varias barras marcadas seguidas porque las características de 60 y 250 barras conservan
+su rastro: el Model Lab cuenta episodios (marcas separadas por 5 barras o menos).
+
+**LOF frente a IF.** LOF mide la densidad local respecto a los vecinos de entrenamiento (`n_neighbors` 35, modo
+novelty); puede aportar cuando la anomalía es una combinación rara en una zona poco poblada, no un valor extremo. Las
+distancias pierden contraste al crecer el número de características, así que conviene un conjunto pequeño.
+
+Están desactivados por defecto en el escaneo de la página Tests (son más lentos); se comparan en el Model Lab.
+
+## Model Lab (`qal/research/model_lab.py`)
+
+Compara detectores sobre los mismos datasets y guarda un experimento `model_comparison`. Por dataset × modelo:
+barras marcadas, episodios, tasa frente a la nominal, barras significativas tras BH, tasa por año (y su coeficiente
+de variación) y por régimen de volatilidad causal (`rel_vol` > 0), estabilidad entre semillas (solo si el modelo es
+estocástico) y con ventanas de entrenamiento más cortas y más largas (solapamiento con tolerancia de ±1 barra),
+matriz de coincidencia entre modelos, tiempo de cálculo y la evaluación predictiva del estudio de eventos
+(separación cronológica, walk-forward, referencia causal, costes estimados) con BH sobre todas las pruebas fuera de
+muestra de la comparación. Los retornos futuros solo se usan ahí, como objetivo de evaluación.
+
+Rareza y capacidad predictiva van en columnas separadas y no hay puntuación agregada. El benchmark sintético mide
+recuperación de eventos inyectados y falsas alarmas en la serie de control; no es evidencia sobre mercados reales.
+Límites: 20 datasets, 8 modelos, las últimas 200.000 barras por dataset, presupuesto de tiempo y cancelación
+comprobados entre unidades de trabajo.
+
 ## Pruebas que respaldan los detectores
 - Recuperación de anomalías sintéticas inyectadas (`tests/test_detectors.py`).
 - Serie de control sin eventos (`SYN-D`) sin retornos extremos.
@@ -159,3 +210,9 @@ horario y se rechaza).
   nulo, NaN o 1; el ejemplo de USDCHF desglosado; un ECON. SCORE alto sin evidencia no queda arriba; tope sin
   significación; multiplicadores; ventaja de continuación conocida detectada fuera de muestra; el movimiento de la
   propia barra del evento no se captura; el retraso de disponibilidad mueve la entrada; muestras insuficientes.
+- Modelos multivariantes (`tests/test_ml_detectors.py`, `tests/test_features.py`): recuperación del choque y del
+  régimen de volatilidad inyectados, tasa de falsas alarmas en series de control, truncado y futuro envenenado,
+  reproducibilidad por semilla, errores de configuración, datos ausentes, cambio de frecuencia (variables de hora) y
+  catálogo documentado.
+- Model Lab (`tests/test_model_lab.py`): medidas de solapamiento y episodios, benchmark sintético, API, caché,
+  exportación CSV, cancelación cooperativa de un trabajo en ejecución y presupuesto de tiempo.

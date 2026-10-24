@@ -53,7 +53,7 @@ def cancel(job_id: str, s: Session = Depends(get_session)):
     if job is None:
         raise HTTPException(404, "job not found")
     if not cancel_job(s, job):
-        raise HTTPException(409, f"job is {job.status}; only queued jobs can be cancelled")
+        raise HTTPException(409, f"job is {job.status}; only queued or running jobs can be cancelled")
     return job
 
 

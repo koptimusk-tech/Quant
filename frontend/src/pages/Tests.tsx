@@ -44,8 +44,9 @@ export default function TestsPage() {
     research.datasets().then(setDatasets, (e) => setError(String(e.message)));
     research.detectors().then((d) => {
       setDetectors(d);
-      setEnabled(Object.fromEntries(d.filter((x) => !x.pairwise).map((x) => [x.name, true])));
-      setParams(Object.fromEntries(d.map((x) => [x.name, Object.fromEntries(Object.entries(x.defaults).map(([k, v]) => [k, String(v)]))])));
+      // Multivariate models (Isolation Forest, LOF) are opt-in here: they are slower; compare them in the Model Lab.
+      setEnabled(Object.fromEntries(d.filter((x) => !x.pairwise).map((x) => [x.name, !("features" in x.defaults)])));
+      setParams(Object.fromEntries(d.map((x) => [x.name, Object.fromEntries(Object.entries(x.defaults).map(([k, v]) => [k, Array.isArray(v) ? v.join(",") : String(v)]))])));
     }, () => undefined);
     refresh();
     const t = window.setInterval(refresh, 4000);
@@ -54,10 +55,13 @@ export default function TestsPage() {
 
   const byInstrument = (iid: string) => datasets.find((d) => d.instrument_id === iid);
   const detectorConfig = () => {
-    const out: Record<string, Record<string, number | string>> = {};
+    const out: Record<string, Record<string, number | string | string[]>> = {};
     for (const d of detectors) {
       if (d.pairwise ? pairs.length === 0 : !enabled[d.name]) continue;
-      out[d.name] = Object.fromEntries(Object.entries(params[d.name] ?? {}).map(([k, v]) => [k, isNaN(Number(v)) ? v : Number(v)]));
+      out[d.name] = Object.fromEntries(Object.entries(params[d.name] ?? {}).map(([k, v]) => [
+        k,
+        Array.isArray(d.defaults[k]) ? v.split(",").map((x) => x.trim()).filter(Boolean) : isNaN(Number(v)) ? v : Number(v),
+      ]));
     }
     return out;
   };

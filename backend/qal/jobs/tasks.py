@@ -119,6 +119,22 @@ def handle_alpha_cycle(session: Session, payload: dict[str, Any], actor: str) ->
     return {"run_id": run.id, **{k: v for k, v in run.results.items() if k.startswith("n_")}}
 
 
+def handle_model_experiment(session: Session, payload: dict[str, Any], actor: str) -> dict[str, Any]:
+    """payload: a Model Lab comparison (see ``qal.research.model_lab.as_config``). Cancellable while running."""
+    from qal.jobs.runner import stop_requested
+    from qal.research.model_lab import as_config, run_comparison
+
+    job_id = payload.get("_job_id")
+    exp = run_comparison(session, as_config(payload), store=ParquetStore(get_settings().data_dir), actor=actor,
+                         should_stop=(lambda: stop_requested(job_id)) if job_id else (lambda: False),
+                         checkpoint=session.commit)
+    session.commit()
+    if exp.status == "failed":
+        raise RuntimeError(exp.error or "model comparison failed")
+    return {"experiment_id": exp.id, "status": exp.status}
+
+
 HANDLERS = {"ingest": handle_ingest, "scan": handle_scan, "ingest_and_scan": handle_ingest_and_scan,
-            "validate": handle_validate, "alpha_cycle": handle_alpha_cycle}
+            "validate": handle_validate, "alpha_cycle": handle_alpha_cycle,
+            "model_experiment": handle_model_experiment}
 __all__ = ["HANDLERS", "latest_dataset"]
