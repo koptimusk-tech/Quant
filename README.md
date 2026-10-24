@@ -31,6 +31,10 @@ Estado: **Fases 0, 1 y 2 completadas, con app de escritorio.** Ver [ROADMAP.md](
   separado), Anomaly Detail (gráfico del evento, distribución de referencia, comprobación de reproducibilidad,
   datos usados, explicaciones alternativas) y Data Health (proveedores, frescura, cobertura, huecos, calidad,
   latencia, errores, descargas y programaciones).
+- **Explicación y prioridad de anomalías**: cada puntuación se explica por separado (rareza, significación con p
+  ajustado, relevancia económica desglosada y capacidad predictiva), con una prioridad de investigación documentada,
+  la etapa de cada anomalía y un estudio de eventos fuera de muestra y neto de costes por tipo de anomalía. Una
+  anomalía interesante no es una estrategia validada. Ver [docs/DETECTORS.md](docs/DETECTORS.md).
 - **Datos sintéticos** claramente etiquetados con anomalías inyectadas conocidas, para probar detectores sin red.
 - **Investigación (Fase 2)**: contratos de hipótesis falsables con criterios de éxito fijados de antemano y congelados
   (hash), modelo de costes completo, motor de backtesting point-in-time (ejecución en la apertura siguiente),

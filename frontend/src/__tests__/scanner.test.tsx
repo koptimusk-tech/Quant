@@ -39,6 +39,19 @@ const anomaly = {
     reference: 0.0002, reference_scale: 0.0014, deviation: 8.4, deviation_unit: "robust σ",
     relative: null, relative_label: null,
   },
+  explanations: {
+    rarity: { statistic: 8.4, statistical_score: 0.63, threshold: 5, formula: "", text: "Statistic +8.4 against a detection threshold of 5." },
+    significance: { level: "not_significant", label: "Not significant", adjusted_pvalue: 0.6, empirical_pvalue: 0.004, text: "A value near 1 is absence of evidence." },
+    economic: { score: null, interpretable: false, formula: "", aggregation: "", components: [], text: "No economic score: index", caveat: null, missing: [] },
+    predictive: { text: "Not part of any stored score." },
+  },
+  investigation_priority: {
+    value: 0.12, tier: "low", base: 0.24, components: [], multipliers: [], capped: false,
+    explanation: "largest contribution: rarity (0.04); no statistical evidence after multiple-testing control.",
+    label: "Research priority, not an execution signal: there is no out-of-sample predictive evidence",
+    formula: "", event_study: null,
+  },
+  stage: { stage: "detection", label: "Detected", hypotheses: [] },
 };
 
 function mockFetch() {
@@ -73,6 +86,25 @@ describe("Market Scanner", () => {
     expect(screen.getByTitle("log return")).toHaveTextContent(/0\.01/);
     expect(screen.getByTitle("trailing median")).toBeInTheDocument();
     expect(screen.getByText("robust σ")).toBeInTheDocument();
+  });
+
+  it("keeps the old columns and adds priority, significance, stage and an expandable explanation", async () => {
+    mockFetch();
+    render(<MemoryRouter><Scanner /></MemoryRouter>);
+    await screen.findByText("SYN-A");
+    for (const h of ["Stat. score", "Econ. score", "Adj. p", "Status", "Investigation priority", "Stage"]) {
+      expect(screen.getByRole("columnheader", { name: new RegExp(h) })).toBeInTheDocument();
+    }
+    expect(screen.getByLabelText("investigation priority 0.12 low")).toBeInTheDocument();
+    expect(screen.getByLabelText("significance not_significant")).toBeInTheDocument();
+    expect(screen.getByText("Detected")).toBeInTheDocument();
+    expect(screen.getByText("DISCOVERED")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Explain scores for SYN-A/ }));
+    const panel = screen.getByLabelText("Score explanations");
+    expect(panel).toHaveTextContent("Why it was detected");
+    expect(panel).toHaveTextContent("absence of evidence");
+    expect(panel).toHaveTextContent("not a validated strategy");
+    expect(panel).toHaveTextContent("Not evaluated");
   });
 
   it("sends filters to the API", async () => {

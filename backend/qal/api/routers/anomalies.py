@@ -4,11 +4,16 @@ from typing import Any
 
 import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 from sqlalchemy import Select, func, or_, select
 from sqlalchemy.orm import Session, aliased
 
 from qal.anomaly.detectors import DETECTORS
+from qal.anomaly.event_study import latest_verdicts, run_event_study
+from qal.anomaly.explain import significance
+from qal.anomaly.priority import config_dict, enrich
 from qal.api.schemas import AnomalyOut, AnomalyPage, SavedQueryIn, SavedQueryOut
+from qal.config import get_settings
 from qal.data.store import ParquetStore
 from qal.db import get_session
 from qal.models import AnomalyDetection, Dataset, Experiment, Instrument, SavedQuery
@@ -24,12 +29,23 @@ SORTS = {
 }
 
 
-def _out(a: AnomalyDetection) -> AnomalyOut:
+PRIORITY_SORT = "investigation_priority"
+MAX_PRIORITY_SORT_ROWS = 20000
+
+
+def _out(a: AnomalyDetection, extra: dict[str, Any] | None = None) -> AnomalyOut:
     o = AnomalyOut.model_validate(a)
     o.symbol, o.asset_class, o.market, o.provider_id = (a.instrument.symbol, a.instrument.asset_class,
                                                         a.instrument.market, a.instrument.provider_id)
     o.related_symbol = a.related_instrument.symbol if a.related_instrument else None
+    if extra:
+        o.investigation_priority, o.stage = extra["priority"], extra["stage"]
     return o
+
+
+def _outs(s: Session, items: list[AnomalyDetection]) -> list[AnomalyOut]:
+    extra = enrich(s, items)
+    return [_out(a, extra.get(a.id)) for a in items]
 
 
 def _filtered(q: Select, *, asset_class, market, symbol, provider, frequency, anomaly_type, detector, status,
@@ -90,8 +106,8 @@ def list_anomalies(
     offset: int = 0,
     s: Session = Depends(get_session),
 ):
-    if sort not in SORTS:
-        raise HTTPException(400, f"sort must be one of {list(SORTS)}")
+    if sort not in SORTS and sort != PRIORITY_SORT:
+        raise HTTPException(400, f"sort must be one of {[*SORTS, PRIORITY_SORT]}")
     if latest_scan_only and not experiment_id:
         experiment_id = s.scalar(select(Experiment.id).where(Experiment.kind == "anomaly_scan",
                                                              Experiment.status == "succeeded")
@@ -100,11 +116,18 @@ def list_anomalies(
               anomaly_type=anomaly_type, detector=detector, status=status, min_stat_score=min_stat_score,
               min_econ_score=min_econ_score, synthetic=synthetic, experiment_id=experiment_id, search=search)
     total = s.scalar(_filtered(select(func.count(AnomalyDetection.id)), **kw))
+    if sort == PRIORITY_SORT:
+        # Computed at read time, so rank every filtered row (bounded) and page in Python.
+        rows = s.scalars(_filtered(select(AnomalyDetection), **kw).order_by(AnomalyDetection.id)
+                         .limit(MAX_PRIORITY_SORT_ROWS)).unique().all()
+        outs = _outs(s, list(rows))
+        outs.sort(key=lambda o: o.investigation_priority["value"], reverse=(order == "desc"))
+        return AnomalyPage(total=total or 0, items=outs[offset:offset + limit])
     col = SORTS[sort]
     q = _filtered(select(AnomalyDetection), **kw).order_by(
         col.desc().nulls_last() if order == "desc" else col.asc().nulls_last(), AnomalyDetection.id)
     items = s.scalars(q.limit(limit).offset(offset)).unique().all()
-    return AnomalyPage(total=total or 0, items=[_out(a) for a in items])
+    return AnomalyPage(total=total or 0, items=_outs(s, list(items)))
 
 
 @router.get("/anomalies/facets")
@@ -117,6 +140,12 @@ def anomaly_facets(s: Session = Depends(get_session)) -> dict[str, list[str]]:
         "anomaly_type": distinct(AnomalyDetection.anomaly_type), "detector": distinct(AnomalyDetection.detector),
         "status": distinct(AnomalyDetection.validation_status), "symbol": distinct(Instrument.symbol),
     }
+
+
+@router.get("/anomalies/priority-config")
+def priority_config() -> dict[str, Any]:
+    """Weights, thresholds and caps of the investigation priority (documented in docs/DETECTORS.md)."""
+    return config_dict()
 
 
 @router.get("/anomalies/{anomaly_id}")
@@ -182,8 +211,11 @@ def anomaly_detail(anomaly_id: str, context_bars: int = Query(60, le=500), s: Se
         j2 = int(np.searchsorted(ev2, ev))
         related_context = bars(other, max(0, j2 - context_bars), min(len(other), j2 + context_bars // 2 + 1))
 
+    ao = _outs(s, [a])[0].model_dump(mode="json")
+    ao["explanations"]["significance"] = significance(a.adjusted_pvalue, a.empirical_pvalue, exp.n_tests)
+    study = latest_verdicts(s, [a.dataset_id]).get((a.dataset_id, a.detector))
     return {
-        "anomaly": _out(a).model_dump(mode="json"),
+        "anomaly": ao,
         "experiment": {"id": exp.id, "algorithm_version": exp.algorithm_version, "code_version": exp.code_version,
                        "config_hash": exp.config_hash, "created_at": exp.created_at, "n_tests": exp.n_tests,
                        "detector_params": params},
@@ -196,11 +228,14 @@ def anomaly_detail(anomaly_id: str, context_bars: int = Query(60, le=500), s: Se
         "related_context_bars": related_context,
         "statistic_series": stat_series,
         "reference_distribution": reference,
-        "related_hypotheses": [],  # Phase 2 (hypothesis contracts)
+        "related_hypotheses": ao["stage"]["hypotheses"],
+        "event_study": s.get(Experiment, study["experiment_id"]).results if study else None,
+        "event_study_id": study["experiment_id"] if study else None,
         "historical_results": None,  # Phase 2 (backtests)
         "notes": [
             "Detected anomalies are observations, not trading signals; no backtest has been run.",
             "Economic score is a preliminary move-vs-assumed-cost ratio, not evidence of profitability.",
+            "Investigation priority orders research work; it is not an execution signal.",
         ],
     }
 
@@ -224,3 +259,35 @@ def delete_saved(qid: str, s: Session = Depends(get_session)):
     if q is None:
         raise HTTPException(404, "not found")
     s.delete(q)
+
+
+class EventStudyIn(BaseModel):
+    dataset_id: str
+    detector: str
+    horizons: list[int] | None = Field(default=None, description="Holding periods in bars; default per frequency")
+
+
+@router.post("/event-studies")
+def create_event_study(body: EventStudyIn, s: Session = Depends(get_session)) -> dict[str, Any]:
+    """Predictive evaluation of one anomaly type on one dataset (forward returns after costs, OOS).
+
+    Identical requests on identical data return the stored study. Every study is recorded, including
+    failed ones and those with too few events.
+    """
+    try:
+        exp = run_event_study(s, body.dataset_id, body.detector, horizons=body.horizons,
+                              store=ParquetStore(get_settings().data_dir))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    if exp.status != "succeeded":
+        raise HTTPException(422, exp.error or "event study failed")
+    return {"id": exp.id, "created_at": exp.created_at, "results": exp.results}
+
+
+@router.get("/event-studies/{study_id}")
+def get_event_study(study_id: str, s: Session = Depends(get_session)) -> dict[str, Any]:
+    exp = s.get(Experiment, study_id)
+    if exp is None or exp.kind != "event_study":
+        raise HTTPException(404, "event study not found")
+    return {"id": exp.id, "created_at": exp.created_at, "status": exp.status, "results": exp.results,
+            "error": exp.error}
