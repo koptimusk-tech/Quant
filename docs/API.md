@@ -57,3 +57,19 @@ POST /api/v1/scans
  "pairs": [["<id QQQ>", "<id SPY>"]],
  "cost_bps": {"etf": 3}}
 ```
+
+## Portfolio & Risk
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| POST | `/portfolio/strategies?include_synthetic=` | Cuerpo opcional `EligibilityCriteria`. Todas las hipótesis validadas como estrategias, elegibles o rechazadas con motivos; sintéticas solo si se piden. |
+| GET | `/portfolio/methods` | Métodos de construcción. |
+| GET | `/portfolio/policies` · `/portfolio/policies/active` | Versiones de la política de riesgo. |
+| POST | `/portfolio/policies` | `{name, limits, approved_by, actor_kind: "human", confirm: true}`: nueva versión. Agentes o sin confirmación → 403 (auditado). |
+| POST | `/portfolio/runs` | `{strategy_ids, methods, rebalance, lookback_days, cov_method, budgets, cost_multiplier, extra_slippage_bps, execution_delay_days, criteria, policy_id, mc_paths, stress_backtests, run_async}`: backtest del portfolio (trabajo `portfolio_run`). |
+| GET | `/portfolio/runs` · `/portfolio/runs/{id}` | Ejecuciones guardadas (`portfolio_backtest`) con métodos, riesgo, correlaciones, estrés y comprobaciones. |
+| GET | `/portfolio/runs/{id}/decisions?decision=&rule=` | Decisiones del risk manager: regla, observado, límite, decisión, acción, motivo, fecha, versión de política. |
+| POST | `/portfolio/proposals` | `{include_synthetic, strategy_ids}`: el agente propone combinaciones (trabajo `portfolio_proposals`). Enviar `limits` o `policy_id` → 403. |
+| GET | `/portfolio/proposals` · `/portfolio/proposals/{id}` | Propuestas con veredicto del risk manager y el registro de mensajes. |
+| POST | `/portfolio/sizing` | Tamaño de una posición redondeado al contrato del instrumento. |
+

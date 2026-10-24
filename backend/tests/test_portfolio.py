@@ -367,3 +367,16 @@ def test_real_hypotheses_are_rejected_with_reasons_and_series_are_walk_forward(c
         assert len(ser.net) > 50 and list(ser.exposure.columns) == r.universe
         assert ser.net.index.is_monotonic_increasing
         assert not catalog(s, EligibilityCriteria())[0].eligible and exp is not None
+
+
+def test_marginal_analysis_flags_the_redundant_pair(syn):
+    from qal.portfolio.risk import marginal_analysis
+
+    _, series = syn
+    ids = ["SYN:trend-eur", "SYN:trend-gbp", "SYN:carry", "SYN:meanrev"]
+    R = pd.DataFrame({s: series[s].net for s in ids}).dropna()
+    C = covariance(R)
+    rows = {m["strategy"]: m for m in marginal_analysis(R, C, construction.equal_weight(4))}
+    assert rows["SYN:trend-eur"]["redundant"] and rows["SYN:trend-eur"]["most_correlated_with"] == "SYN:trend-gbp"
+    assert rows["SYN:trend-gbp"]["adds_risk_without_diversifying"]
+    assert not rows["SYN:meanrev"]["redundant"]

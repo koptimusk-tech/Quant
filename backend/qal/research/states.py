@@ -53,9 +53,9 @@ TRANSITIONS[("SUSPENDED", "HYPOTHESIS_FORMULATED")] = "any"
 
 # Promotions that need gates which do not exist yet are refused with an explicit reason.
 UNAVAILABLE_GATES = {
-    "PAPER_TRADING": "Gate E (portfolio risk) and the paper trading engine arrive in Phase 6",
-    "RISK_APPROVED": "Hierarchical Risk Manager arrives in Phase 6",
-    "LIVE_ELIGIBLE": "Live eligibility requires Phase 6 risk controls",
+    "PAPER_TRADING": "the paper trading engine is not implemented (Phase 6 added portfolio risk checks only)",
+    "RISK_APPROVED": "risk approval is a human decision outside the app; the Phase 6 risk manager only enforces limits",
+    "LIVE_ELIGIBLE": "live eligibility is not implemented",
     "LIVE_ENABLED": "Gate F (explicit operational authorisation) and execution adapters are not implemented",
 }
 

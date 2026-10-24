@@ -209,12 +209,14 @@ def drawdown_stats(r: pd.Series) -> dict[str, Any]:
 def marginal_analysis(R: pd.DataFrame, C: pd.DataFrame, w: np.ndarray, corr_threshold: float = 0.7) -> list[dict[str, Any]]:
     """For each strategy: what removing it changes, and whether it adds risk without diversifying.
 
-    Flags a strategy as redundant when its correlation with the rest of the portfolio is above
-    ``corr_threshold``, or when dropping it (and renormalising) lowers volatility without lowering the
-    effective number of bets.
+    * ``redundant``: its return correlation with another selected strategy (or with the rest of the
+      portfolio) is above ``corr_threshold``: it repeats a bet already held;
+    * ``concentrates``: dropping it (and renormalising) *raises* the effective number of bets, i.e. it takes
+      a share of risk out of proportion to the diversification it brings.
     """
     cols = list(C.columns)
     X = R[cols].dropna(how="any")
+    pair = X.corr()
     out = []
     base = diversification(w, C)
     base_vol = risk_contributions(w, C)["vol"]
@@ -231,12 +233,18 @@ def marginal_analysis(R: pd.DataFrame, C: pd.DataFrame, w: np.ndarray, corr_thre
         rho = float(np.corrcoef(X.iloc[:, i].to_numpy(), rest_ret)[0, 1]) if len(X) > 2 else None
         vol_wo = risk_contributions(wr, Cr)["vol"]
         enb_b, enb_r = base["effective_number_of_bets"] or 0, d_rest["effective_number_of_bets"] or 0
-        redundant = bool((rho is not None and rho > corr_threshold) or (vol_wo < base_vol and enb_r >= enb_b - 1e-9))
-        out.append({"strategy": sid, "corr_with_rest": rho, "vol_with": base_vol, "vol_without": vol_wo,
+        others = pair[sid].drop(sid)
+        partner = str(others.idxmax()) if len(others) else None
+        max_pair = float(others.max()) if len(others) else None
+        redundant = bool((rho is not None and rho > corr_threshold) or (max_pair is not None and max_pair > corr_threshold))
+        concentrates = bool(enb_r > enb_b + 0.05)
+        note = (f"redundant: correlation {max_pair:.2f} with {partner}" if redundant else
+                "concentrates risk: removing it raises the effective number of bets" if concentrates else "diversifies")
+        out.append({"strategy": sid, "corr_with_rest": rho, "max_pair_corr": max_pair, "most_correlated_with": partner,
+                    "concentrates": concentrates, "vol_with": base_vol, "vol_without": vol_wo,
                     "enb_with": base["effective_number_of_bets"], "enb_without": d_rest["effective_number_of_bets"],
                     "dr_with": base["diversification_ratio"], "dr_without": d_rest["diversification_ratio"],
-                    "redundant": redundant,
-                    "note": ("adds risk without adding diversification" if redundant else "diversifies")})
+                    "redundant": redundant, "adds_risk_without_diversifying": redundant or concentrates, "note": note})
     return out
 
 
