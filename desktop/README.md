@@ -16,7 +16,8 @@ lee del terminal MT5 instalado en el mismo equipo.
 
 - Ejecutarlo: en GitHub, pestaña *Actions* → *Desktop installers* → *Run workflow*. Al terminar, los
   instaladores están en *Artifacts* de esa ejecución.
-- Publicar una versión: crear un tag `vX.Y.Z`; el workflow adjunta los instaladores a la release.
+- Publicar una versión: ejecutar el workflow con *release_tag* = `vX.Y.Z` (o crear ese tag); los instaladores
+  quedan en *Releases*, con descarga directa en `https://github.com/koptimusk-tech/Quant/releases/latest`.
 
 Los instaladores no están firmados: Windows SmartScreen pedirá "Más información → Ejecutar de todas formas" y
 macOS pedirá abrirlo con clic derecho → *Abrir* la primera vez.
