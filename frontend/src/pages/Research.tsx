@@ -71,6 +71,60 @@ const EMPTY: Form = {
   anomaly: "",
 };
 
+const FIELD_LABELS: Record<string, string> = {
+  title: "Title",
+  premise: "Economic / behavioural premise",
+  mechanism: "Proposed mechanism",
+  dataset_ids: "Datasets",
+  entry_rule: "Entry rule",
+  exit_rule: "Exit rule",
+  features: "Features",
+  horizon_bars: "Horizon (bars)",
+  risks: "Risks",
+  invalidation: "Invalidation",
+  holdout_start: "Holdout starts",
+  train_bars: "train_bars",
+  test_bars: "test_bars",
+  embargo_bars: "embargo_bars",
+};
+
+/** Missing or too-short fields, checked before sending (the API applies the same rules). */
+export function contractProblems(f: {
+  title: string; premise: string; mechanism: string; datasets: string[]; entry_rule: string; exit_rule: string;
+  features: string; risks: string; invalidation: string; holdout_start: string;
+}): string[] {
+  const out: string[] = [];
+  const lines = (v: string) => v.split("\n").map((x) => x.trim()).filter(Boolean);
+  if (f.title.trim().length < 5) out.push("Title: at least 5 characters.");
+  if (f.premise.trim().length < 40) out.push(`Economic / behavioural premise: at least 40 characters (now ${f.premise.trim().length}).`);
+  if (f.mechanism.trim().length < 40) out.push(`Proposed mechanism: at least 40 characters (now ${f.mechanism.trim().length}).`);
+  if (f.datasets.length === 0) out.push("Datasets: choose at least one.");
+  if (!f.features.split(",").some((x) => x.trim())) out.push("Features: name at least one (comma separated).");
+  if (f.entry_rule.trim().length < 10) out.push("Entry rule: at least 10 characters.");
+  if (f.exit_rule.trim().length < 10) out.push("Exit rule: at least 10 characters.");
+  if (lines(f.risks).length === 0) out.push("Risks: write at least one (one per line).");
+  if (lines(f.invalidation).length === 0) out.push("Invalidation: write at least one condition that would falsify it.");
+  if (!f.holdout_start) out.push("Holdout starts: pick the date from which data is kept aside for the final test.");
+  return out;
+}
+
+/** Turn a FastAPI 422 body ("422: [{loc, msg}, …]") into one readable line per field. */
+export function readableApiError(message: string): string {
+  const m = message.match(/^422: (\[.*\])$/s);
+  if (!m) return message;
+  try {
+    const items = JSON.parse(m[1]) as { loc?: (string | number)[]; msg?: string }[];
+    return items
+      .map((i) => {
+        const key = String(i.loc?.[i.loc.length - 1] ?? "");
+        return `${FIELD_LABELS[key] ?? key}: ${(i.msg ?? "").replace(/^Value error, /, "")}`;
+      })
+      .join("\n");
+  } catch {
+    return message;
+  }
+}
+
 function NewHypothesis({ strategies, datasets, onCreated }: { strategies: StrategyInfo[]; datasets: DatasetRow[]; onCreated: (h: Hypothesis) => void }) {
   const [params] = useSearchParams();
   const [f, setF] = useState<Form>(EMPTY);
@@ -99,6 +153,11 @@ function NewHypothesis({ strategies, datasets, onCreated }: { strategies: Strate
 
   const submit = async () => {
     setErrors(null);
+    const problems = contractProblems(f);
+    if (problems.length) {
+      setErrors(problems.join("\n"));
+      return;
+    }
     const fixed = Object.fromEntries(Object.entries(f.fixed).filter(([, v]) => v !== "").map(([k, v]) => [k, parseList(v)[0]]));
     const grid = Object.fromEntries(Object.entries(f.grid).filter(([, v]) => v.trim() !== "").map(([k, v]) => [k, parseList(v)]));
     const contract = {
@@ -134,7 +193,7 @@ function NewHypothesis({ strategies, datasets, onCreated }: { strategies: Strate
       onCreated(await research.create(contract));
       setF(EMPTY);
     } catch (e) {
-      setErrors((e as Error).message);
+      setErrors(readableApiError((e as Error).message));
     }
   };
 
@@ -206,7 +265,12 @@ function NewHypothesis({ strategies, datasets, onCreated }: { strategies: Strate
         <button className="btn" onClick={submit}>Register hypothesis</button>
         <span className="text-xs text-slate-500">Vague wording is rejected; embargo must cover the horizon.</span>
       </div>
-      <div className="mt-2"><ErrorBox error={errors} /></div>
+      {errors && (
+        <div role="alert" className="mt-2 rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200">
+          <p className="font-semibold">The hypothesis was not saved. Fix these fields:</p>
+          <ul className="mt-1 list-disc pl-5">{errors.split("\n").map((e) => <li key={e}>{e}</li>)}</ul>
+        </div>
+      )}
     </Section>
   );
 }
