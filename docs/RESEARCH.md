@@ -34,8 +34,9 @@ estrategia e instrumentos) bajan al final con un aviso: volver a probarlas suma 
 | Tipo | Descripción |
 |---|---|
 | `event` | Tras un evento de un detector (decidido al cierre de la barra), posición a favor (`continuation`) o en contra (`reversal`) durante `hold_bars`. |
-| `ts_momentum` | Signo del retorno de `lookback` barras, opcionalmente con objetivo de volatilidad. |
+| `ts_momentum` | Signo del retorno de `lookback` barras, opcionalmente con objetivo de volatilidad y activo solo en un régimen de volatilidad (`regime`: `all`, `high_vol`, `low_vol`; ratio de volatilidad realizada corta/larga conocido al cierre). |
 | `pair_mean_reversion` | Spread de OLS rodante (ventana que termina en t-1); entrada en `entry_z`, salida en `exit_z` o `max_hold`. Exposición bruta 1. |
+| `cross_sectional_factor` | Universo de 3 o más instrumentos ordenado por un factor de precios (`momentum`: retorno de t-lookback a t-skip; `low_vol`: menor volatilidad); largo el cuantil superior, corto el inferior, neutral en dólares, rebalanceo cada `rebalance_bars`. |
 | `buy_and_hold` | Benchmark. |
 
 ## Motor de backtesting (`qal/research/backtest.py`)
@@ -80,9 +81,52 @@ y los modelos supervisados que la usarán llegan en la Fase 5.
 Las decisiones se guardan en `gate_decisions` con su versión de política. La transición a `VALIDATION_PASSED` /
 `VALIDATION_FAILED` solo la ejecuta el motor de políticas; la API rechaza promociones manuales (409).
 
+## Estados de una hipótesis
+
+`HYPOTHESIS_FORMULATED → EXPERIMENT_PENDING → IN_SAMPLE_EVALUATED → OUT_OF_SAMPLE_EVALUATED →
+VALIDATION_PASSED | VALIDATION_FAILED`, y `VALIDATION_PASSED → PAPER_TRADING_ELIGIBLE`. Cada paso posterior a
+`EXPERIMENT_PENDING` lo da solo el motor de políticas, con su evidencia en la auditoría; no hay saltos. Las filas
+antiguas en `BACKTEST_PENDING` siguen funcionando. `PAPER_TRADING_ELIGIBLE` (`qal/research/promotion.py`) exige
+`VALIDATION_PASSED`, gates A–D superados, exactamente un acceso al holdout que cumpla la métrica principal y el
+drawdown prerregistrados, costes explícitos por dataset, límites de riesgo y la aprobación explícita de una persona;
+los agentes no pueden aprobar. Solo marca un candidato: no se envían órdenes y la ejecución real sigue desactivada.
+
+## Alpha Discovery Engine (`qal/alpha/`)
+
+Un ciclo (`alpha-cycle` en la CLI, `POST /alpha/runs` en la API) es un flujo fijo de cuatro agentes deterministas,
+sin modelo de lenguaje (0 tokens) y sin debate abierto:
+
+1. **Alpha Researcher** (`agents.AlphaResearcher`) genera ideas por tres rutas:
+   - *anomalías*: reversión y continuación tras shocks de retorno (con los parámetros del último escaneo), momentum
+     condicionado al régimen de volatilidad, reversión de divergencias de pares;
+   - *factores* (`factors.py`): momentum y baja volatilidad transversales sobre universos de 3+ instrumentos diarios
+     comparables; Value y Quality se declaran no comprobables porque no hay fundamentales point-in-time;
+   - *relaciones* (`relationships.py`): todas las parejas comparables se prueban en el periodo de investigación
+     (primer 80 % de las barras comunes) con cointegración de Engle-Granger, correlación de retornos, estabilidad de
+     la correlación entre mitades y vida media del residuo; BH sobre todas las pruebas; solo se proponen parejas
+     cointegradas tras BH con vida media entre 1 y 60 barras. Todas las combinaciones quedan guardadas.
+   También momentum de serie temporal como efecto documentado (ruta `prior`) y huecos de datos (volumen de ticks
+   en FX, futuros/spot/vencimientos, fundamentales).
+2. **Quant Analyst** convierte cada idea en un contrato congelado: variables, regla, horizonte, costes, métrica
+   principal y umbrales prerregistrados, diseño walk-forward con embargo ≥ horizonte y holdout aislado del 20 %.
+3. **Adversarial Reviewer** objeta con referencias a registros guardados. Bloquean: duplicado, mezcla de datos
+   sintéticos y reales, menos eventos antes del holdout que `min_trades` (evidencia insuficiente) o pocos
+   rebalanceos. Mayores: el origen leyó el periodo del holdout, veredicto previo sin evidencia, relación inestable o
+   no cointegrada, costes por defecto, universo pequeño, sesgo largo contra efectivo. Menores: calidad `warn`,
+   solapamiento de tenencias, horario FX intradía, volatilidad no es dirección, multiplicidad.
+4. **Research Coordinator** deduplica (estrategia + mecanismo + instrumentos), registra lo que no tiene objeciones
+   bloqueantes (las mayores quedan como limitaciones del contrato), ejecuta `run_validation` para las mejores dentro
+   del presupuesto (`Budget`: ideas, hipótesis, experimentos, variantes, segundos) y deja cada decisión con su motivo.
+
+Todos los mensajes (`agent_messages`) se guardan, también los de ideas rechazadas. Los números que citan los agentes
+se copian de registros guardados; los resultados oficiales los calculan el motor de validación y el de políticas.
+La UI (**Alpha Research**) separa prioridad de investigación (heurística), evidencia predictiva (walk-forward y
+gates) y rentabilidad neta validada (holdout una vez, costes explícitos, aprobación).
+
 ## Limitaciones conocidas
 
-- Universos de uno o dos activos por hipótesis; carteras multiactivo en la Fase 6.
+- Los factores transversales usan pesos iguales y universos pequeños; la gestión de cartera multiactivo llega en la Fase 6.
+- Las anomalías y estudios de eventos que originan ideas leen todo el dataset, periodo del holdout incluido: el holdout no toca los backtests, pero no es independiente de la elección de la idea (queda anotado en el contrato).
 - Sin contratos de futuros individuales ni calendario de vencimientos (el rollover es un coste periódico supuesto).
 - El placebo usa retornos cierre a cierre para la estrategia real y para las simulaciones (comparación coherente,
   aproximada respecto al motor apertura/cierre).

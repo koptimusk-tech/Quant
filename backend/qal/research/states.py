@@ -1,29 +1,50 @@
 """Research state machine. Transitions are deterministic and only the policy engine may promote.
 
-LIVE_ELIGIBLE does not allow automatic trading; LIVE_ENABLED needs independent authorisation
-(Gate F), which is not implemented, so it is unreachable by design in this version.
+Research path of a hypothesis::
+
+    DISCOVERED -> HYPOTHESIS_FORMULATED -> EXPERIMENT_PENDING -> IN_SAMPLE_EVALUATED
+        -> OUT_OF_SAMPLE_EVALUATED -> VALIDATION_PASSED | VALIDATION_FAILED
+    VALIDATION_PASSED -> PAPER_TRADING_ELIGIBLE   (policy, after the holdout test and explicit human approval)
+
+``BACKTEST_PENDING`` is the name used before this version for ``EXPERIMENT_PENDING``; rows stored with it
+keep working (same transitions). PAPER_TRADING_ELIGIBLE only marks a hypothesis as a candidate: nothing
+trades. PAPER_TRADING / RISK_APPROVED / LIVE_* need gates that are not implemented, so they stay unreachable.
 """
 
 from __future__ import annotations
 
 STATES = (
-    "DISCOVERED", "INVESTIGATING", "HYPOTHESIS_FORMULATED", "BACKTEST_PENDING", "VALIDATION_FAILED",
-    "VALIDATION_PASSED", "PAPER_TRADING", "RISK_APPROVED", "LIVE_ELIGIBLE", "LIVE_ENABLED", "SUSPENDED", "REJECTED",
+    "DISCOVERED", "INVESTIGATING", "HYPOTHESIS_FORMULATED", "EXPERIMENT_PENDING", "BACKTEST_PENDING",
+    "IN_SAMPLE_EVALUATED", "OUT_OF_SAMPLE_EVALUATED", "VALIDATION_FAILED", "VALIDATION_PASSED",
+    "PAPER_TRADING_ELIGIBLE", "PAPER_TRADING", "RISK_APPROVED", "LIVE_ELIGIBLE", "LIVE_ENABLED", "SUSPENDED",
+    "REJECTED",
 )
 
-# (from, to) -> who may perform it. "policy" = only the deterministic policy engine after gates.
+# (from, to) -> who may perform it. "policy" = only the deterministic policy engine after its checks.
 TRANSITIONS: dict[tuple[str, str], str] = {
-    ("HYPOTHESIS_FORMULATED", "BACKTEST_PENDING"): "any",
-    ("VALIDATION_FAILED", "BACKTEST_PENDING"): "any",  # re-run (same frozen contract; trials accumulate)
-    ("VALIDATION_PASSED", "BACKTEST_PENDING"): "any",
-    ("BACKTEST_PENDING", "VALIDATION_FAILED"): "policy",
-    ("BACKTEST_PENDING", "VALIDATION_PASSED"): "policy",
-    ("BACKTEST_PENDING", "HYPOTHESIS_FORMULATED"): "policy",  # run crashed
-    ("VALIDATION_PASSED", "PAPER_TRADING"): "policy",  # requires Gate E (Phase 6)
+    ("HYPOTHESIS_FORMULATED", "EXPERIMENT_PENDING"): "any",
+    ("VALIDATION_FAILED", "EXPERIMENT_PENDING"): "any",  # re-run (same frozen contract; trials accumulate)
+    ("VALIDATION_PASSED", "EXPERIMENT_PENDING"): "any",
+    ("EXPERIMENT_PENDING", "IN_SAMPLE_EVALUATED"): "policy",
+    ("EXPERIMENT_PENDING", "HYPOTHESIS_FORMULATED"): "policy",  # run crashed
+    ("IN_SAMPLE_EVALUATED", "OUT_OF_SAMPLE_EVALUATED"): "policy",
+    ("IN_SAMPLE_EVALUATED", "HYPOTHESIS_FORMULATED"): "policy",
+    ("OUT_OF_SAMPLE_EVALUATED", "VALIDATION_FAILED"): "policy",
+    ("OUT_OF_SAMPLE_EVALUATED", "VALIDATION_PASSED"): "policy",
+    ("OUT_OF_SAMPLE_EVALUATED", "HYPOTHESIS_FORMULATED"): "policy",
+    ("VALIDATION_PASSED", "PAPER_TRADING_ELIGIBLE"): "policy",  # holdout + approval checks in research.promotion
+    ("PAPER_TRADING_ELIGIBLE", "PAPER_TRADING"): "policy",  # requires Gate E (not implemented)
+    ("VALIDATION_PASSED", "PAPER_TRADING"): "policy",
     ("PAPER_TRADING", "RISK_APPROVED"): "policy",
     ("RISK_APPROVED", "LIVE_ELIGIBLE"): "policy",
     ("LIVE_ELIGIBLE", "LIVE_ENABLED"): "policy",  # requires Gate F (explicit human authorisation)
 }
+# Rows written before EXPERIMENT_PENDING existed: the old pending state moves on like the new one.
+for (_frm, _to), _who in list(TRANSITIONS.items()):
+    if _frm == "EXPERIMENT_PENDING":
+        TRANSITIONS[("BACKTEST_PENDING", _to)] = _who
+TRANSITIONS[("BACKTEST_PENDING", "VALIDATION_FAILED")] = "policy"
+TRANSITIONS[("BACKTEST_PENDING", "VALIDATION_PASSED")] = "policy"
 for s in STATES:
     if s not in ("REJECTED",):
         TRANSITIONS[(s, "REJECTED")] = "any"
@@ -44,7 +65,7 @@ class TransitionError(ValueError):
 
 
 def check_transition(current: str, target: str, actor_kind: str) -> None:
-    """actor_kind: "policy" for the policy engine, anything else for users/agents."""
+    """actor_kind: "policy" for the policy engine; users and agents cannot take policy transitions."""
     if target not in STATES:
         raise TransitionError(f"unknown state {target}")
     rule = TRANSITIONS.get((current, target))

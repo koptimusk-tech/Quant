@@ -107,6 +107,17 @@ class HypothesisContract(BaseModel):
     success: SuccessCriteria = Field(default_factory=SuccessCriteria)
     validation: ValidationDesign
     capital: float = Field(1_000_000.0, gt=0)
+    # Provenance and pre-registration (optional, so contracts stored before these fields stay valid).
+    origin: Literal["anomaly", "prior", "factor", "relationship", "manual"] = "manual"
+    origin_observation: str = Field("", description="The observation that motivated the hypothesis")
+    expected_direction: Literal["long", "short", "both", "long_short", "spread_reversion",
+                                "spread_continuation"] | None = None
+    secondary_metrics: list[str] = Field(
+        default_factory=lambda: ["mean_net", "sortino_net", "max_drawdown", "hit_rate", "n_trades", "exposure_avg",
+                                 "dsr", "placebo_pvalue", "positive_window_frac"])
+    assumptions: list[str] = Field(default_factory=list, description="Statistical assumptions the test relies on")
+    data_requirements: list[str] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
 
     @field_validator("premise", "mechanism", "entry_rule", "exit_rule")
     @classmethod
@@ -118,7 +129,10 @@ class HypothesisContract(BaseModel):
     @model_validator(mode="after")
     def _consistency(self) -> HypothesisContract:
         n_assets = STRATEGIES[self.strategy.type].n_assets
-        if len(self.dataset_ids) != n_assets:
+        if n_assets == 0:  # cross-sectional: a universe of at least 3 instruments
+            if len(self.dataset_ids) < 3 or len(set(self.dataset_ids)) != len(self.dataset_ids):
+                raise ValueError(f"{self.strategy.type} needs at least 3 distinct datasets")
+        elif len(self.dataset_ids) != n_assets:
             raise ValueError(f"{self.strategy.type} needs exactly {n_assets} dataset(s)")
         # Purging: the embargo must cover the label horizon so train labels cannot overlap test bars.
         if self.validation.embargo_bars < self.horizon_bars:

@@ -118,7 +118,13 @@ def run_backtest(frames: list[pd.DataFrame], weights: pd.DataFrame, costs: list[
 
 
 def extract_trades(positions: pd.DataFrame, bars: pd.DataFrame, names: list[str]) -> list[dict[str, Any]]:
-    """A trade is a run of non-zero exposure with constant sign in the first leg (pairs: by the first leg)."""
+    """A trade is a run of non-zero exposure with constant sign in the first leg (pairs: by the first leg).
+
+    With more than two legs (a cross-sectional portfolio) a trade is a holding period: a run of bars with
+    the same non-zero position vector, from one rebalance to the next.
+    """
+    if len(names) > 2:
+        return _portfolio_trades(positions, bars, names)
     lead = positions[names[0]].to_numpy()
     sign = np.sign(np.round(lead, 12))
     net = bars["net"].to_numpy()
@@ -135,5 +141,22 @@ def extract_trades(positions: pd.DataFrame, bars: pd.DataFrame, names: list[str]
                            "net_pnl": float(net[start:end + 1].sum()), "gross_pnl": float(gross[start:end + 1].sum())})
             start = None
         if start is None and cur != 0 and cur != prev:
+            start = i
+    return trades
+
+
+def _portfolio_trades(positions: pd.DataFrame, bars: pd.DataFrame, names: list[str]) -> list[dict[str, Any]]:
+    P = np.round(positions[names].to_numpy(dtype=float), 12)
+    net, gross = bars["net"].to_numpy(), bars["gross"].to_numpy()
+    trades, start = [], None
+    for i in range(len(P) + 1):
+        changed = i == len(P) or i == 0 or not np.array_equal(P[i], P[i - 1])
+        if start is not None and changed:
+            end = min(i, len(P) - 1)
+            trades.append({"entry_ts": str(positions["ts"].iloc[start]), "exit_ts": str(positions["ts"].iloc[end]),
+                           "direction": 0, "bars": int(i - start),
+                           "net_pnl": float(net[start:end + 1].sum()), "gross_pnl": float(gross[start:end + 1].sum())})
+            start = None
+        if start is None and i < len(P) and changed and np.abs(P[i]).sum() > 0:
             start = i
     return trades

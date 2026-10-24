@@ -160,6 +160,10 @@ class Validator:
         pbo = probability_of_backtest_overfitting(np.column_stack([f.bars["net"].to_numpy() for f in full])) \
             if len(variants) > 1 else None
 
+        # Per-instrument contribution over the OOS windows (close-to-close, before costs).
+        R_oos = self._bar_returns()[pd.Index(self.research[0]["ts"]).get_indexer(oos_pos["ts"])]
+        per_asset_oos = dict(zip(self.names, (oos_pos[self.names].to_numpy() * R_oos).sum(axis=0).tolist(),
+                                 strict=True))
         leakage = self._leakage_checks(variants, chosen_idx, wins)
         return {
             "research_bars": self.n_research, "holdout_bars": len(self.all_frames[0]) - self.n_research,
@@ -172,7 +176,8 @@ class Validator:
             "robustness": {"cost_sensitivity": cost_sens, "param_grid": grid, "robust_param_frac": robust_param_frac,
                            "positive_window_frac": float(np.mean(win_pos)) if win_pos else 0.0,
                            "regimes": regime, "bootstrap": boot, **placebo,
-                           "per_asset_pnl_in_sample": full[max(set(chosen_idx), key=chosen_idx.count)].asset_pnl},
+                           "per_asset_pnl_in_sample": full[max(set(chosen_idx), key=chosen_idx.count)].asset_pnl,
+                           "per_asset_oos_gross_cc": per_asset_oos},
             "overfitting": {**dsr, "pbo": None if pbo is None else pbo["pbo"], "pbo_detail": pbo,
                             "prior_trials": n_prior_trials,
                             "note": "Parameter grid metrics are in-sample (research period); OOS metrics come from "
