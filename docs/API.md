@@ -27,6 +27,7 @@ Base: `/api/v1`. Especificación completa OpenAPI en `/api/v1/openapi.json` y UI
 | GET/POST/PATCH/DELETE | `/schedules` | Programaciones periódicas (mínimo 60 s). |
 | GET | `/audit` | Eventos de auditoría. |
 | GET | `/strategies` | Tipos de estrategia, parámetros y número de activos. |
+| GET | `/research/proposals` | Hipótesis sugeridas con los datos y anomalías actuales, como contratos listos para registrar (no ejecuta nada). |
 | GET | `/research/meta` | Estados, transiciones, gates, costes por defecto y versión de la política. |
 | POST/GET | `/hypotheses` · GET `/hypotheses/{id}` | Crear (contrato validado) y listar hipótesis; el detalle incluye versiones, validaciones y decisiones de gates. |
 | PATCH | `/hypotheses/{id}` | Siempre 409: los contratos están congelados; crea una versión nueva con `parent_id`. |

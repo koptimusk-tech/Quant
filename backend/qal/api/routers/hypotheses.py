@@ -14,6 +14,7 @@ from qal.jobs.runner import submit_job
 from qal.models import Experiment, GateDecision, Hypothesis
 from qal.research.contract import HypothesisContract
 from qal.research.costs import DEFAULT_COSTS
+from qal.research.proposals import build_proposals
 from qal.research.service import create_hypothesis, run_final_test, run_validation, transition
 from qal.research.states import STATES, TransitionError
 from qal.research.strategies import STRATEGIES
@@ -74,6 +75,16 @@ def research_meta() -> dict[str, Any]:
     """Contract JSON schema, default cost assumptions per asset class and the research states."""
     return {"contract_schema": HypothesisContract.model_json_schema(), "states": list(STATES),
             "default_costs": {k: v.model_dump() for k, v in DEFAULT_COSTS.items()}}
+
+
+@router.get("/research/proposals")
+def proposals(s: Session = Depends(get_session)) -> list[dict[str, Any]]:
+    """Hypotheses worth testing given the current data and anomalies, as ready-to-register contracts.
+
+    Built deterministically from the latest datasets and scan results on every call; nothing is run or
+    counted as a trial until a contract is registered and validated.
+    """
+    return build_proposals(s)
 
 
 @router.post("/hypotheses", response_model=HypothesisOut, status_code=201)
