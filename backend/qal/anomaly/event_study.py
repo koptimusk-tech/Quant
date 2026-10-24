@@ -314,7 +314,8 @@ def _signed(tr: _Trades, rule: str) -> tuple[np.ndarray, np.ndarray]:
 def evaluate(df: pd.DataFrame, detector: str, params: dict[str, Any], horizons: list[int], asset_class: str,
              seed: int = 0, *, other: pd.DataFrame | None = None, cost_scenarios: list[CostScenario] | None = None,
              spread_bps: pd.Series | None = None, base_scenario: str = "base_estimate",
-             split_ts: pd.Timestamp | str | None = None) -> dict[str, Any]:
+             split_ts: pd.Timestamp | str | None = None, precomputed: Any = None) -> dict[str, Any]:
+    """``precomputed``: the detector's output on this same ``df`` (sorted by ts), to avoid running it twice."""
     det = DETECTORS[detector](**params)
     pair = det.pairwise
     if pair and other is None:
@@ -325,7 +326,7 @@ def evaluate(df: pd.DataFrame, detector: str, params: dict[str, Any], horizons: 
         b = next((s for s in scenarios if s.name == base_scenario), scenarios[-1])
         scenarios.append(CostScenario("historical_spread", b.commission_bps, b.half_spread_bps, b.slippage_bps,
                                       b.slippage_range_frac, source="historical_spread"))
-    res = det.run(df, other) if pair else det.run(df)
+    res = precomputed if precomputed is not None else (det.run(df, other) if pair else det.run(df))
     rules = PAIR_RULES if pair else RULES
     base: dict[str, Any] = {
         "version": VERSION, "detector": detector, "detector_version": det.version, "params": det.params,

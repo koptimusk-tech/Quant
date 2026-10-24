@@ -168,7 +168,7 @@ class Job(Base):
     kind: Mapped[str] = mapped_column(String(32))  # ingest, scan
     payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     idempotency_key: Mapped[str | None] = mapped_column(String(128), unique=True)
-    status: Mapped[str] = mapped_column(String(16), default="queued")  # queued, running, succeeded, failed, cancelled
+    status: Mapped[str] = mapped_column(String(16), default="queued")  # queued, running, cancelling, succeeded, failed, cancelled
     attempts: Mapped[int] = mapped_column(Integer, default=0)
     max_attempts: Mapped[int] = mapped_column(Integer, default=3)
     result: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)

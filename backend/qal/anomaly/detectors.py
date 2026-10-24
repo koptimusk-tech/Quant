@@ -1,4 +1,5 @@
-"""Phase 1 detectors: return shocks, volume, volatility regime, pair divergence.
+"""Detectors: return shocks, volume, volatility regime, pair divergence (Phase 1) and the multivariate
+Isolation Forest / Local Outlier Factor models (``qal.anomaly.ml``).
 
 All detectors are causal: the statistic at bar t uses bars <= t and baselines that end at t-1.
 ``tests/test_no_lookahead.py`` checks that appending future bars never changes past detections.
@@ -11,8 +12,14 @@ import pandas as pd
 from scipy import stats
 
 from qal.anomaly.base import Detection, Detector, DetectorOutput, common_explanations
+from qal.anomaly.ml import IsolationForestDetector, LocalOutlierFactorDetector
 from qal.data.schema import bar_delta, total_return_index
-from qal.features.basic import ewma_vol, log_returns, trailing_rank_pvalue, trailing_robust
+from qal.features.basic import (
+    ewma_vol,
+    log_returns,
+    trailing_rank_pvalue,
+    trailing_robust,
+)
 
 
 def _bar(df: pd.DataFrame) -> pd.Timedelta:
@@ -264,5 +271,6 @@ class PairDivergenceDetector(Detector):
 
 
 DETECTORS: dict[str, type[Detector]] = {
-    d.name: d for d in (ReturnShockDetector, VolumeAnomalyDetector, VolatilityRegimeDetector, PairDivergenceDetector)
+    d.name: d for d in (ReturnShockDetector, VolumeAnomalyDetector, VolatilityRegimeDetector, PairDivergenceDetector,
+                        IsolationForestDetector, LocalOutlierFactorDetector)
 }

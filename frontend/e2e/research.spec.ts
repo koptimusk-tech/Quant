@@ -8,6 +8,8 @@ test("investigate an anomaly, register a hypothesis and validate it", async ({ p
   await page.locator("tbody tr").first().click();
   await page.getByRole("link", { name: "Investigate → hypothesis" }).click();
   await expect(page.getByRole("heading", { name: "Quant Research Lab" })).toBeVisible();
+  // The form is prefilled from the anomaly once it loads (slower while a background job runs); wait for it.
+  await expect(page.getByLabel("Title", { exact: true })).toHaveValue(/follow-up/, { timeout: 20_000 });
   await page.locator("textarea").nth(0).fill("Two assets driven by a common factor should not drift apart persistently after costs.");
   await page.locator("textarea").nth(1).fill("Relative-value traders close temporary deviations of the spread around its rolling fit.");
   await page.getByLabel("Entry rule").fill("Enter when |z| >= entry_z on the rich leg");

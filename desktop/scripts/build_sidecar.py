@@ -42,7 +42,8 @@ def main() -> None:
         "--exclude-module", "pytest",
         "--exclude-module", "IPython",
         "--exclude-module", "matplotlib",
-        "--exclude-module", "sklearn",
+        "--hidden-import", "sklearn.ensemble",  # imported lazily by the ML detectors
+        "--hidden-import", "sklearn.neighbors",
         "--exclude-module", "PIL",
     ]
     for mod in OPTIONAL_PROVIDERS:

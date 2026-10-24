@@ -8,6 +8,7 @@ import HypothesisDetailPage from "./pages/HypothesisDetail";
 import ValidationReport from "./pages/ValidationReport";
 import AlphaResearchPage from "./pages/AlphaResearch";
 import AlphaHypothesisPage from "./pages/AlphaHypothesis";
+import ModelLabPage from "./pages/ModelLab";
 
 const link = ({ isActive }: { isActive: boolean }) =>
   `rounded-md px-3 py-1.5 text-sm ${isActive ? "bg-slate-200 font-medium dark:bg-slate-800" : "hover:bg-slate-100 dark:hover:bg-slate-900"}`;
@@ -31,6 +32,9 @@ export default function App() {
             <NavLink to="/alpha" className={link}>
               Alpha Research
             </NavLink>
+            <NavLink to="/models" className={link}>
+              Model Lab
+            </NavLink>
             <NavLink to="/data" className={link}>
               Data Health
             </NavLink>
@@ -49,6 +53,7 @@ export default function App() {
           <Route path="/validations/:id" element={<ValidationReport />} />
           <Route path="/alpha" element={<AlphaResearchPage />} />
           <Route path="/alpha/:id" element={<AlphaHypothesisPage />} />
+          <Route path="/models" element={<ModelLabPage />} />
         </Routes>
       </main>
     </div>

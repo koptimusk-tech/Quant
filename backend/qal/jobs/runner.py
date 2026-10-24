@@ -52,12 +52,23 @@ def submit_job(session: Session, kind: str, payload: dict[str, Any], *, idempote
 
 
 def cancel_job(session: Session, job: Job) -> bool:
-    if job.status != "queued":
+    """A queued job is cancelled at once. A running job is marked ``cancelling``: handlers that support it
+    (``model_experiment``) stop between units of work and keep their partial results; others run to the end."""
+    if job.status == "queued":
+        job.status = "cancelled"
+        job.finished_at = datetime.now(UTC)
+    elif job.status == "running":
+        job.status = "cancelling"
+    else:
         return False
-    job.status = "cancelled"
-    job.finished_at = datetime.now(UTC)
-    audit.record(session, "api", "job_cancelled", "job", job.id)
+    audit.record(session, "api", "job_cancel_requested" if job.status == "cancelling" else "job_cancelled",
+                 "job", job.id)
     return True
+
+
+def stop_requested(job_id: str) -> bool:
+    with session_scope() as s:
+        return s.scalar(select(Job.status).where(Job.id == job_id)) == "cancelling"
 
 
 def _claim_next(now: datetime) -> str | None:
@@ -75,20 +86,23 @@ def _claim_next(now: datetime) -> str | None:
 def run_job(job_id: str, actor: str = "worker") -> None:
     with session_scope() as s:
         job = s.get(Job, job_id)
-        kind, payload = job.kind, dict(job.payload)
+        kind, payload = job.kind, {**job.payload, "_job_id": job_id}
     try:
         with session_scope() as s:
             result = HANDLERS[kind](s, payload, actor)
         with session_scope() as s:
             job = s.get(Job, job_id)
-            job.status, job.result, job.error, job.finished_at = "succeeded", result, None, datetime.now(UTC)
-            audit.record(s, actor, "job_succeeded", "job", job_id)
+            status = "cancelled" if job.status == "cancelling" else "succeeded"
+            job.status, job.result, job.error, job.finished_at = status, result, None, datetime.now(UTC)
+            audit.record(s, actor, f"job_{status}", "job", job_id)
     except Exception as exc:
         log.exception("job %s failed", job_id)
         with session_scope() as s:
             job = s.get(Job, job_id)
             job.error = f"{type(exc).__name__}: {exc}"
-            if job.attempts < job.max_attempts:
+            if job.status == "cancelling":
+                job.status, job.finished_at = "cancelled", datetime.now(UTC)
+            elif job.attempts < job.max_attempts:
                 job.status = "queued"
                 job.run_after = datetime.now(UTC) + timedelta(seconds=30 * 2 ** (job.attempts - 1))
             else:
@@ -139,6 +153,8 @@ class Worker:
         # Jobs left "running" by a crash are re-queued (handlers are idempotent).
         with session_scope() as s:
             s.execute(update(Job).where(Job.status == "running").values(status="queued"))
+            s.execute(update(Job).where(Job.status == "cancelling").values(status="cancelled",
+                                                                            finished_at=datetime.now(UTC)))
         self._thread = threading.Thread(target=self._loop, name="qal-worker", daemon=True)
         self._thread.start()
 
