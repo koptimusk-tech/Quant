@@ -47,6 +47,12 @@ Estado: **Fases 0, 1 y 2 completadas, con app de escritorio.** Ver [ROADMAP.md](
   look-through por divisa), Equal Weight, Inverse Vol y Risk Budgeting, Hierarchical Risk Manager determinista con
   políticas versionadas y decisiones auditadas, sizing con lotes y ticks, stress tests y backtest del portfolio sin
   look-ahead. Ver [docs/PORTFOLIO.md](docs/PORTFOLIO.md).
+- **Paper Trading (Fase 7)**: simulación de ejecución, aislada de cualquier broker. Replay histórico o datos nuevos
+  con controles por barra y pausa automática, órdenes market/limit/stop/stop-limit con máquina de estados,
+  ejecución conservadora sobre OHLCV (nunca en la barra que decidió la orden), P&L realizado y no realizado por
+  separado, divisas y margen, control de riesgo pre-trade con los límites del HRM, kill switch, reconciliación,
+  recuperación tras reinicio y evaluación frente al backtest con criterios prefijados. Ninguna evaluación declara
+  una estrategia lista para operar. Ver [docs/PAPER_TRADING.md](docs/PAPER_TRADING.md).
 - **App de escritorio** (Tauri) que arranca el motor local y abre la interfaz. Instaladores para Windows, macOS y
   Linux sin necesidad de Python, generados en GitHub Actions. Ver [desktop/README.md](desktop/README.md).
 - **Integración continua** (`.github/workflows/ci.yml`): pruebas del backend en SQLite y PostgreSQL, frontend y
@@ -261,6 +267,7 @@ Metodología: [docs/RESEARCH.md](docs/RESEARCH.md).
 - [docs/API.md](docs/API.md): endpoints principales (OpenAPI completo en `/docs`).
 - [docs/RESEARCH.md](docs/RESEARCH.md): contratos, backtesting, validación, gates.
 - [docs/PORTFOLIO.md](docs/PORTFOLIO.md): construcción de portfolios, risk manager, sizing y estrés.
+- [docs/PAPER_TRADING.md](docs/PAPER_TRADING.md): simulación de órdenes, ejecución, riesgo pre-trade y evaluación.
 - [desktop/README.md](desktop/README.md): app de escritorio.
 - [docs/DETECTORS.md](docs/DETECTORS.md): estadísticos, supuestos y limitaciones de cada detector.
 - [docs/DATA_PROVIDERS.md](docs/DATA_PROVIDERS.md): evaluación de proveedores.

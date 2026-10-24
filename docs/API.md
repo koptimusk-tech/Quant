@@ -73,3 +73,25 @@ POST /api/v1/scans
 | GET | `/portfolio/proposals` · `/portfolio/proposals/{id}` | Propuestas con veredicto del risk manager y el registro de mensajes. |
 | POST | `/portfolio/sizing` | Tamaño de una posición redondeado al contrato del instrumento. |
 
+
+## Paper Trading (simulación)
+
+Ninguna ruta envía órdenes fuera de la aplicación. Las acciones llevan `by` (persona que actúa).
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/paper/strategies` | Estrategias validadas (elegibles o no, con motivos) y reglas `DEMO:` no validadas. |
+| POST | `/paper/sessions` | `SessionConfig`: `{name, created_by, mode: replay\|new_data, strategies: [{strategy_id, dataset_ids, params, allocation}], capital, account_currency, start, end, cost_scenario, cost_overrides, delay_bars, order_type, limit_offset_bps, order_ttl_bars, stop_loss_pct, stop_order_type, rebalance_threshold, allow_unvalidated_demo, criteria, policy_id}`. |
+| GET | `/paper/sessions` · `/paper/sessions/{id}` | Sesiones con estado, etiquetas, resumen, últimas señales, configuración y referencias de datos. |
+| POST | `/paper/sessions/{id}/start` · `/pause` | Arrancar o reanudar; pausar. |
+| POST | `/paper/sessions/{id}/step` | `{by, bars, skip_bad_bar}`: procesar barras de forma síncrona (máx. 500). |
+| POST | `/paper/sessions/{id}/run` | `{by, max_bars}`: trabajo `paper_run` en segundo plano. |
+| POST | `/paper/sessions/{id}/kill-switch` | `{by, active, confirm: true, reason}`. |
+| POST | `/paper/sessions/{id}/orders` · `/orders/{oid}/cancel` | Orden manual simulada (pasa por el control de riesgo); cancelar. |
+| PATCH | `/paper/sessions/{id}/config` | `{by, changes, reason}`: solo campos operativos; versionado y registrado. |
+| GET | `/paper/sessions/{id}/orders` · `/fills` · `/positions` · `/equity` · `/risk` · `/events` | Filtros `status`, `strategy`, `instrument`, `start`, `end`, `level`, `category`. |
+| POST | `/paper/sessions/{id}/reconcile` | Reconciliación manual. |
+| POST · GET | `/paper/sessions/{id}/evaluation` | Evaluar frente al backtest (no es una aprobación) / último resultado. |
+| GET | `/paper/sessions/{id}/export?table=orders\|fills\|equity\|ledger\|events\|signals` | CSV. |
+| POST | `/paper/sessions/{id}/reset` · `/delete` | `{by, confirm: true}`; el registro del experimento se conserva. |
+| GET | `/paper/compare?ids=a,b` | Comparación de sesiones. |

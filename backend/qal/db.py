@@ -24,7 +24,8 @@ def make_engine(url: str) -> Engine:
         path = url.split("///", 1)[-1]
         if path and path != ":memory:":
             Path(path).parent.mkdir(parents=True, exist_ok=True)
-        engine = create_engine(url, connect_args={"check_same_thread": False})
+        # Wait up to 30 s for another writer (API request or background job) instead of failing after 5 s.
+        engine = create_engine(url, connect_args={"check_same_thread": False, "timeout": 30})
 
         @event.listens_for(engine, "connect")
         def _sqlite_pragmas(dbapi_conn, _):  # pragma: no cover - trivial

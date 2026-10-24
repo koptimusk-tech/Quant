@@ -960,3 +960,184 @@ export const portfolio = {
   proposal: (id: string) => request<ProposalRun>(`/portfolio/proposals/${id}`),
   jobs: () => request<Job[]>("/jobs?limit=50"),
 };
+
+// -- Paper Trading (simulation only) ------------------------------------------------------------------
+export interface PaperPlan {
+  id: string;
+  kind: "hypothesis" | "demo";
+  type: string;
+  params: Record<string, unknown>;
+  dataset_ids: string[];
+  allocation: number;
+  status: string;
+  notes: string[];
+  validation: Record<string, unknown>;
+}
+
+export interface PaperSessionOut {
+  id: string;
+  name: string;
+  status: string;
+  mode: "replay" | "new_data";
+  is_synthetic: boolean;
+  is_demo: boolean;
+  kill_switch: boolean;
+  pause_reason: string | null;
+  cursor_ts: string | null;
+  clock_ts: string | null;
+  bars_processed: number;
+  initial_capital: number;
+  account_currency: string;
+  summary: Record<string, number>;
+  strategies: string[];
+  plans: PaperPlan[];
+  notes: string[];
+  config: Record<string, any>;
+  config_version: number;
+  config_hash: string;
+  config_history: Record<string, any>[];
+  criteria: Record<string, number>;
+  criteria_hash: string;
+  code_version: string;
+  data_refs: { dataset_id: string; symbol: string; content_hash: string; provider: string; is_synthetic: boolean }[];
+  policy_version: string;
+  experiment_id: string;
+  verdict: string | null;
+  labels: string[];
+  created_by: string;
+  created_at: string;
+  last_signals?: Record<string, { bar_ts: string; decided_at: string; targets: Record<string, number> }>;
+  alerts?: boolean;
+}
+
+export interface PaperOrderOut {
+  id: string;
+  client_order_id: string;
+  strategy_id: string;
+  instrument: string;
+  side: string;
+  quantity: number;
+  lots: number;
+  order_type: string;
+  limit_price: number | null;
+  stop_price: number | null;
+  purpose: string;
+  status: string;
+  created_ts: string;
+  reference_price: number;
+  filled_quantity: number;
+  avg_fill_price: number | null;
+  commission: number;
+  slippage_cost: number;
+  reject_reason: string | null;
+  cancel_reason: string | null;
+  risk_checks: { rule: string; observed: unknown; limit: unknown; decision: string; reason: string; action: string }[];
+}
+
+export interface PaperPositionOut {
+  strategy_id: string;
+  instrument: string;
+  quantity: number;
+  avg_price: number;
+  last_price: number | null;
+  realized_pnl: number;
+  unrealized_pnl: number;
+  fees: number;
+  holding_costs: number;
+  notional: number;
+}
+
+export interface PaperEventOut {
+  seq: number;
+  sim_ts: string | null;
+  level: string;
+  category: string;
+  code: string;
+  message: string;
+  strategy_id: string | null;
+  instrument: string | null;
+  created_at: string;
+}
+
+export interface PaperEquityOut {
+  bar_ts: string;
+  equity: number;
+  cash: number;
+  realized_pnl: number;
+  unrealized_pnl: number;
+  fees: number;
+  gross_exposure: number;
+  drawdown: number;
+}
+
+export interface PaperRiskOut {
+  as_of: string;
+  scope: string;
+  rule: string;
+  observed: string | null;
+  limit: string;
+  decision: string;
+  action: string;
+  reason: string;
+  policy_version: string;
+}
+
+export interface PaperEvaluation {
+  verdict: string;
+  reasons: string[];
+  note: string;
+  metrics: Record<string, number | null>;
+  per_strategy: { strategy_id: string; kind: string; backtest_return_net: number; signals_compared: number; signals_agree: number; notes: string[] }[];
+  regime: { instrument: string; vol_ratio_session_vs_prior_250: number; shift: boolean }[];
+  criteria: Record<string, number>;
+  criteria_hash: string;
+  curves: { ts: string[]; paper: number[]; backtest: number[] };
+}
+
+export interface PaperStrategies {
+  validated: { strategy_id: string; name: string; status: string; eligible: boolean; reasons: string[]; universe: string[]; is_synthetic: boolean }[];
+  demo: { strategy_id: string; name: string; description: string; defaults: Record<string, unknown>; n_assets: number; note: string }[];
+}
+
+export interface PaperCreate {
+  name: string;
+  created_by: string;
+  mode: "replay" | "new_data";
+  capital: number;
+  cost_scenario: string;
+  order_type: string;
+  stop_loss_pct: number | null;
+  start?: string | null;
+  allow_unvalidated_demo: boolean;
+  strategies: { strategy_id: string; dataset_ids?: string[]; params?: Record<string, unknown>; allocation: number }[];
+  criteria?: Record<string, number>;
+}
+
+const P = "/paper/sessions";
+const post = <T,>(path: string, body: unknown) => request<T>(path, { method: "POST", body: JSON.stringify(body) });
+export const paper = {
+  strategies: () => request<PaperStrategies>("/paper/strategies"),
+  datasets: () => request<DatasetRow[]>("/datasets"),
+  sessions: () => request<PaperSessionOut[]>(P),
+  session: (id: string) => request<PaperSessionOut>(`${P}/${id}`),
+  create: (body: PaperCreate) => post<PaperSessionOut>(P, body),
+  start: (id: string, by: string) => post<PaperSessionOut>(`${P}/${id}/start`, { by }),
+  pause: (id: string, by: string) => post<PaperSessionOut>(`${P}/${id}/pause`, { by }),
+  step: (id: string, by: string, bars: number, skip_bad_bar = false) =>
+    post<{ result: Record<string, unknown>; session: PaperSessionOut }>(`${P}/${id}/step`, { by, bars, skip_bad_bar }),
+  run: (id: string, by: string) => post<{ job: Job }>(`${P}/${id}/run`, { by }),
+  killSwitch: (id: string, by: string, active: boolean, reason: string) =>
+    post<PaperSessionOut>(`${P}/${id}/kill-switch`, { by, active, confirm: true, reason }),
+  reset: (id: string, by: string) => post<PaperSessionOut>(`${P}/${id}/reset`, { by, confirm: true }),
+  remove: (id: string, by: string) => post<{ deleted: string }>(`${P}/${id}/delete`, { by, confirm: true }),
+  orders: (id: string, q: Record<string, unknown> = {}) => request<PaperOrderOut[]>(`${P}/${id}/orders${toQuery(q)}`),
+  cancelOrder: (id: string, oid: string, by: string) => post<PaperOrderOut>(`${P}/${id}/orders/${oid}/cancel`, { by }),
+  positions: (id: string) => request<PaperPositionOut[]>(`${P}/${id}/positions`),
+  equity: (id: string) => request<PaperEquityOut[]>(`${P}/${id}/equity`),
+  events: (id: string, q: Record<string, unknown> = {}) => request<PaperEventOut[]>(`${P}/${id}/events${toQuery(q)}`),
+  risk: (id: string, decision?: string) => request<PaperRiskOut[]>(`${P}/${id}/risk${decision ? `?decision=${decision}` : ""}`),
+  evaluate: (id: string) => post<PaperEvaluation>(`${P}/${id}/evaluation`, {}),
+  evaluation: (id: string) => request<PaperEvaluation>(`${P}/${id}/evaluation`),
+  compare: (ids: string[]) => request<Record<string, any>[]>(`/paper/compare?ids=${ids.join(",")}`),
+  exportUrl: (id: string, table: string) => `/api/v1${P}/${id}/export?table=${table}`,
+};
