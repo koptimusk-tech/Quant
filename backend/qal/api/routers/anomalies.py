@@ -264,19 +264,21 @@ def delete_saved(qid: str, s: Session = Depends(get_session)):
 class EventStudyIn(BaseModel):
     dataset_id: str
     detector: str
-    horizons: list[int] | None = Field(default=None, description="Holding periods in bars; default per frequency")
+    horizons: list[int] | None = Field(default=None, description="Holding periods in bars; default 1, 5, 10, 20")
+    related_dataset_id: str | None = Field(default=None, description="Second leg, required for pair_divergence")
+    seed: int = 0
 
 
 @router.post("/event-studies")
 def create_event_study(body: EventStudyIn, s: Session = Depends(get_session)) -> dict[str, Any]:
-    """Predictive evaluation of one anomaly type on one dataset (forward returns after costs, OOS).
+    """Predictive evaluation of one anomaly type on one dataset (excess forward returns, OOS, cost scenarios).
 
     Identical requests on identical data return the stored study. Every study is recorded, including
     failed ones and those with too few events.
     """
     try:
-        exp = run_event_study(s, body.dataset_id, body.detector, horizons=body.horizons,
-                              store=ParquetStore(get_settings().data_dir))
+        exp = run_event_study(s, body.dataset_id, body.detector, horizons=body.horizons, seed=body.seed,
+                              related_dataset_id=body.related_dataset_id, store=ParquetStore(get_settings().data_dir))
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     if exp.status != "succeeded":
