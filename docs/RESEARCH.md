@@ -12,6 +12,23 @@ número de activos incompatible con la estrategia, rejillas de más de 200 varia
 horizonte (purging). El contrato se guarda con su hash y **no se puede editar**: se crea una versión nueva
 (`parent_id`) y los ensayos de todas las versiones se cuentan juntos.
 
+## Hipótesis sugeridas (`qal/research/proposals.py`)
+
+El Research Lab propone hipótesis a partir de los datos y anomalías cargados (`GET /research/proposals`). Se
+recalculan de forma determinista cada vez y **no ejecutan nada**: son contratos válidos que la persona revisa,
+registra y valida a mano ("Use this proposal" rellena el formulario). Plantillas:
+
+| Tipo | Cuándo aparece | Rejilla (variantes = ensayos) | Prioridad (orden, no probabilidad) |
+|---|---|---|---|
+| Momentum de serie temporal | Datasets 1d o 1wk con historia suficiente | lookback 20/60/120 (1d) o 4/12/26 (1wk) | 0,6 fija |
+| Reacción tras shocks | ≥ 10 `return_shock` detectados en el dataset | modo reversión/continuación × 3 periodos de tenencia | 0,25 + 0,35·min(n/100, 1) + 0,3 si alguno es significativo tras BH |
+| Reversión del spread | Dos datasets de la misma frecuencia y clase, correlación de retornos ≥ 0,5 en ≥ 300 barras | entry_z 2,0/2,5 | 0,3 + 0,4·(corr − 0,5)/0,5 |
+
+El diseño fuera de muestra se dimensiona con la longitud del dataset: holdout en el último 20 % del tiempo,
+train = 40 % del tramo de investigación (entre 50 y 2000 barras), test = 10 % (entre 10 y 500) y embargo igual al
+horizonte. Las propuestas sobre datos reales van antes que las sintéticas, y las que ya están registradas (misma
+estrategia e instrumentos) bajan al final con un aviso: volver a probarlas suma ensayos a la misma familia.
+
 ## Estrategias de reglas (`qal/research/strategies.py`)
 
 | Tipo | Descripción |

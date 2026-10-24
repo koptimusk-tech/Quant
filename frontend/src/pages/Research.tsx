@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { api, research, type DatasetRow, type Hypothesis, type StrategyInfo } from "../api";
+import { api, research, type DatasetRow, type Hypothesis, type Proposal, type StrategyInfo } from "../api";
 import { Badge, ErrorBox, Section, SyntheticBadge, fmtTs } from "../components/ui";
 
 export function StatusBadge({ status }: { status: string }) {
@@ -88,6 +88,34 @@ const FIELD_LABELS: Record<string, string> = {
   embargo_bars: "embargo_bars",
 };
 
+/** Pre-fill the form from a proposed contract; the person still reviews it and registers it. */
+export function formFromContract(c: Record<string, any>): Form {
+  const str = (v: unknown) => (v === undefined || v === null ? "" : String(v));
+  const v = c.validation ?? {};
+  return {
+    ...EMPTY,
+    title: str(c.title),
+    premise: str(c.premise),
+    mechanism: str(c.mechanism),
+    strategy: str(c.strategy?.type) || EMPTY.strategy,
+    datasets: [...(c.dataset_ids ?? [])],
+    fixed: Object.fromEntries(Object.entries(c.strategy?.params ?? {}).map(([k, x]) => [k, str(x)])),
+    grid: Object.fromEntries(Object.entries(c.strategy?.param_grid ?? {}).map(([k, x]) => [k, (x as unknown[]).join(", ")])),
+    entry_rule: str(c.entry_rule),
+    exit_rule: str(c.exit_rule),
+    horizon_bars: str(c.horizon_bars ?? EMPTY.horizon_bars),
+    features: (c.features ?? []).join(", "),
+    risks: (c.risks ?? []).join("\n"),
+    invalidation: (c.invalidation ?? []).join("\n"),
+    benchmark: str(c.benchmark ?? "cash"),
+    train_bars: str(v.train_bars ?? EMPTY.train_bars),
+    test_bars: str(v.test_bars ?? EMPTY.test_bars),
+    embargo_bars: str(v.embargo_bars ?? EMPTY.embargo_bars),
+    holdout_start: v.holdout_start ? String(v.holdout_start).slice(0, 10) : "",
+    anomaly: str((c.source_anomaly_ids ?? [])[0] ?? ""),
+  };
+}
+
 /** Missing or too-short fields, checked before sending (the API applies the same rules). */
 export function contractProblems(f: {
   title: string; premise: string; mechanism: string; datasets: string[]; entry_rule: string; exit_rule: string;
@@ -125,9 +153,9 @@ export function readableApiError(message: string): string {
   }
 }
 
-function NewHypothesis({ strategies, datasets, onCreated }: { strategies: StrategyInfo[]; datasets: DatasetRow[]; onCreated: (h: Hypothesis) => void }) {
+function NewHypothesis({ strategies, datasets, onCreated, preset, sourceIds }: { strategies: StrategyInfo[]; datasets: DatasetRow[]; onCreated: (h: Hypothesis) => void; preset?: Form; sourceIds?: string[] }) {
   const [params] = useSearchParams();
-  const [f, setF] = useState<Form>(EMPTY);
+  const [f, setF] = useState<Form>(preset ?? EMPTY);
   const [errors, setErrors] = useState<string | null>(null);
   const strat = strategies.find((s) => s.name === f.strategy);
   const set = (k: keyof Form) => (e: { target: { value: string } }) => setF((x) => ({ ...x, [k]: e.target.value }));
@@ -164,7 +192,7 @@ function NewHypothesis({ strategies, datasets, onCreated }: { strategies: Strate
       title: f.title,
       premise: f.premise,
       mechanism: f.mechanism,
-      source_anomaly_ids: f.anomaly ? [f.anomaly] : [],
+      source_anomaly_ids: sourceIds?.length ? sourceIds : f.anomaly ? [f.anomaly] : [],
       dataset_ids: f.datasets,
       features: f.features.split(",").map((s) => s.trim()).filter(Boolean),
       strategy: { type: f.strategy, params: fixed, param_grid: grid },
@@ -200,6 +228,7 @@ function NewHypothesis({ strategies, datasets, onCreated }: { strategies: Strate
   const area = "input min-h-16 w-full";
   return (
     <Section title="New hypothesis (the contract is frozen when saved)">
+      {preset && <p className="mb-3 text-xs text-slate-500">Pre-filled from a suggested hypothesis. Review every field before registering it: nothing has been run yet.</p>}
       <div className="grid gap-3 md:grid-cols-2">
         <label className="flex flex-col gap-1 text-xs text-slate-500">Title<input className="input" value={f.title} onChange={set("title")} /></label>
         <label className="flex flex-col gap-1 text-xs text-slate-500">
@@ -275,7 +304,43 @@ function NewHypothesis({ strategies, datasets, onCreated }: { strategies: Strate
   );
 }
 
+function Proposals({ items, onUse }: { items: Proposal[] | null; onUse: (p: Proposal) => void }) {
+  return (
+    <Section title="Suggested hypotheses">
+      <p className="mb-2 text-xs text-slate-500">
+        Built from your datasets and scan results each time this page opens. They are drafts: nothing is backtested
+        until you register one and run its validation, and every variant then counts as a trial.
+      </p>
+      {items === null && <p className="text-sm text-slate-500">Loading…</p>}
+      {items?.length === 0 && <p className="text-sm text-slate-500">No suggestions yet. Load data in Data Health and run a scan in Tests.</p>}
+      <ul className="flex flex-col gap-2" aria-label="Suggested hypotheses">
+        {items?.map((p) => (
+          <li key={p.id} className="rounded border border-slate-200 p-3 dark:border-slate-700">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-medium">{p.title}</span>
+              {p.is_synthetic && <SyntheticBadge />}
+              <span className="text-xs text-slate-500" title="Ordering hint from the evidence, not a probability of success">priority {p.priority.toFixed(2)}</span>
+              <span className="text-xs text-slate-500">{p.variants} variant{p.variants > 1 ? "s" : ""}</span>
+            </div>
+            <p className="mt-1 text-sm">{p.why}</p>
+            {p.existing_hypotheses.length > 0 && (
+              <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+                Already registered:{" "}
+                {p.existing_hypotheses.map((h) => <Link key={h.id} className="underline" to={`/research/${h.id}`}>{h.title} ({h.status})</Link>)}
+                . Testing it again adds trials to the same family.
+              </p>
+            )}
+            <button className="btn mt-2" onClick={() => onUse(p)}>Use this proposal</button>
+          </li>
+        ))}
+      </ul>
+    </Section>
+  );
+}
+
 export default function ResearchPage() {
+  const [proposals, setProposals] = useState<Proposal[] | null>(null);
+  const [picked, setPicked] = useState<Proposal | null>(null);
   const [hyps, setHyps] = useState<Hypothesis[]>([]);
   const [strategies, setStrategies] = useState<StrategyInfo[]>([]);
   const [datasets, setDatasets] = useState<DatasetRow[]>([]);
@@ -285,6 +350,7 @@ export default function ResearchPage() {
     research.hypotheses().then(setHyps, (e) => setError(e.message));
     research.strategies().then(setStrategies, () => undefined);
     research.datasets().then(setDatasets, () => undefined);
+    research.proposals().then(setProposals, () => setProposals([]));
   }, []);
   const sorted = useMemo(() => hyps, [hyps]);
   return (
@@ -307,7 +373,23 @@ export default function ResearchPage() {
           </tbody>
         </table>
       </Section>
-      <NewHypothesis strategies={strategies} datasets={datasets} onCreated={(h) => navigate(`/research/${h.id}`)} />
+      <Proposals
+        items={proposals}
+        onUse={(p) => {
+          setPicked(p);
+          setTimeout(() => document.getElementById("new-hypothesis")?.scrollIntoView({ behavior: "smooth" }), 0);
+        }}
+      />
+      <div id="new-hypothesis">
+        <NewHypothesis
+          key={picked?.id ?? "blank"}
+          strategies={strategies}
+          datasets={datasets}
+          preset={picked ? formFromContract(picked.contract) : undefined}
+          sourceIds={picked?.contract.source_anomaly_ids}
+          onCreated={(h) => navigate(`/research/${h.id}`)}
+        />
+      </div>
     </div>
   );
 }
