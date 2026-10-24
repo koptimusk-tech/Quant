@@ -20,7 +20,7 @@ Base: `/api/v1`. Especificación completa OpenAPI en `/api/v1/openapi.json` y UI
 | GET | `/anomalies/facets` | Valores disponibles para los filtros. |
 | GET | `/anomalies/priority-config` | Pesos, umbrales y topes de la prioridad de investigación. |
 | GET | `/anomalies/{id}` | Detalle con barras de contexto, serie del estadístico, distribución de referencia, verificación `reproduced`, hipótesis relacionadas y el último estudio de eventos. |
-| POST | `/event-studies` | `{dataset_id, detector, horizons?}`: evaluación predictiva del tipo de anomalía (retornos posteriores netos de costes, IC, BH, fuera de muestra). |
+| POST | `/event-studies` | `{dataset_id, detector, related_dataset_id?, horizons?, seed?}`: evaluación predictiva v2 del tipo de anomalía (exceso sobre benchmark causal, IC, BH, fuera de muestra purgado, walk-forward, escenarios de coste; pares con `related_dataset_id`). |
 | GET | `/event-studies/{id}` | Resultado guardado de un estudio de eventos. |
 | GET/POST/DELETE | `/saved-queries` | Consultas guardadas. |
 | GET/POST | `/jobs` · GET `/jobs/{id}` · POST `/jobs/{id}/cancel` | Trabajos (`ingest`, `scan`, `ingest_and_scan`, `validate`). |

@@ -6,6 +6,7 @@
     python -m qal.cli ingest ccxt BTC/USDT crypto --frequency 1h --exchange binance
     python -m qal.cli scan --all
     python -m qal.cli worker                   # run jobs and schedules without the API
+    python -m qal.cli predictive-study --out runs   # event studies on the real EURUSD/USDCHF datasets
 """
 
 from __future__ import annotations
@@ -13,7 +14,8 @@ from __future__ import annotations
 import argparse
 import json
 import time
-from datetime import datetime
+from datetime import UTC, datetime
+from pathlib import Path
 
 from sqlalchemy import select
 
@@ -68,6 +70,36 @@ def cmd_scan(args: argparse.Namespace) -> None:
                          indent=2, default=str))
 
 
+def cmd_predictive(args: argparse.Namespace) -> None:
+    from qal.research import predictive
+
+    create_all()
+    spreads = []
+    for spec in args.spread_csv:
+        # SYMBOL:FREQ:POINT:PATH (the path goes last so Windows drive letters survive the split)
+        sym, freq, point, path = spec.split(":", 3)
+        spreads.append(predictive.spread_from_mt5_csv(path, sym, freq, float(point), args.spread_csv_timezone))
+    symbols = tuple(s.strip() for s in args.symbols.split(",") if s.strip())
+    freqs = tuple(f.strip() for f in args.frequencies.split(",") if f.strip())
+    if args.spread_mt5:
+        for sym in symbols:
+            for freq in freqs:
+                try:
+                    spreads.append(predictive.spread_from_mt5_terminal(sym, freq, args.mt5_offset_hours))
+                except Exception as exc:  # reported, never replaced by an estimate presented as real
+                    print(f"historical spread unavailable for {sym} {freq}: {exc}")
+    pair = tuple(args.pair.split(",")) if args.pair else None
+    cfg = predictive.RunConfig(symbols=symbols, frequencies=freqs, seed=args.seed, pair=pair, spreads=spreads,
+                               horizons=tuple(int(h) for h in args.horizons.split(",")))
+    out = Path(args.out) / f"run_{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}"
+    with session_scope() as s:
+        r = predictive.run(s, ParquetStore(get_settings().data_dir), cfg, out)
+    print(json.dumps({"out_dir": str(out), "run_hash": r["run_hash"],
+                      "missing": [f"{m['symbol']} {m['frequency']}" for m in r["missing_datasets"]],
+                      "verdicts": [f"{c['dataset']} {c['detector']}: {c.get('verdict') or c['status']}"
+                                   for c in r["comparison"]]}, indent=2))
+
+
 def cmd_worker(args: argparse.Namespace) -> None:
     from qal.jobs.runner import process_once
 
@@ -104,6 +136,18 @@ def main() -> None:
     sc.add_argument("--all", action="store_true")
     sc.set_defaults(fn=cmd_scan)
     sub.add_parser("worker").set_defaults(fn=cmd_worker)
+    pv = sub.add_parser("predictive-study", help="out-of-sample event studies on real datasets")
+    pv.add_argument("--out", default="predictive_runs")
+    pv.add_argument("--symbols", default="EURUSD,USDCHF")
+    pv.add_argument("--frequencies", default="1d,1h")
+    pv.add_argument("--horizons", default="1,5,10,20")
+    pv.add_argument("--pair", default="EURUSD,USDCHF", help="Y,X symbols; empty to skip")
+    pv.add_argument("--seed", type=int, default=0)
+    pv.add_argument("--spread-csv", action="append", default=[], help="SYMBOL:FREQ:POINT:PATH of an MT5 bar export")
+    pv.add_argument("--spread-csv-timezone", default=None, help="timezone of the CSV times (default UTC)")
+    pv.add_argument("--spread-mt5", action="store_true", help="read bar spreads from the running MT5 terminal")
+    pv.add_argument("--mt5-offset-hours", type=float, default=0.0, help="broker server time minus UTC")
+    pv.set_defaults(fn=cmd_predictive)
     args = p.parse_args()
     args.fn(args)
 

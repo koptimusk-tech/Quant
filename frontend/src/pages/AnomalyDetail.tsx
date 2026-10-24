@@ -40,7 +40,7 @@ export default function AnomalyDetailPage() {
     setStudyBusy(true);
     setStudyError(null);
     try {
-      await api.eventStudy(d.anomaly.dataset_id, d.anomaly.detector);
+      await api.eventStudy(d.anomaly.dataset_id, d.anomaly.detector, d.anomaly.related_dataset_id);
       load(); // refresh priority and stage with the new evidence
     } catch (e) {
       setStudyError(String((e as Error).message ?? e));
@@ -140,22 +140,19 @@ export default function AnomalyDetailPage() {
       <Section
         title="Predictive evaluation (event study of this anomaly type on this dataset)"
         right={
-          !a.related_dataset_id && (
-            <button className="btn" onClick={runStudy} disabled={studyBusy}>
-              {studyBusy ? "Running…" : study ? "Re-run predictive evaluation" : "Run predictive evaluation"}
-            </button>
-          )
+          <button className="btn" onClick={runStudy} disabled={studyBusy}>
+            {studyBusy ? "Running…" : study ? "Re-run predictive evaluation" : "Run predictive evaluation"}
+          </button>
         }
       >
         <ErrorBox error={studyError} />
-        {a.related_dataset_id ? (
-          <p className="text-sm text-slate-500">Event studies of pair divergences are not supported yet.</p>
-        ) : study ? (
+        {study ? (
           <EventStudyView s={study} />
         ) : (
           <p className="text-sm text-slate-500">
             Not evaluated. The study re-runs {a.detector} on this dataset, enters at the first open after each event becomes available, and
-            measures forward returns after costs at several horizons, in and out of sample. Nothing is traded.
+            measures forward returns against the unconditional return of the same horizon, in and out of sample, under several cost
+            scenarios. Pair divergences are measured on the spread (long Y, short β·X) with costs on both legs. Nothing is traded.
           </p>
         )}
       </Section>

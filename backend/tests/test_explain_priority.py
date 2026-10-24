@@ -134,7 +134,7 @@ def test_known_continuation_edge_is_supported_out_of_sample():
     assert res["out_of_sample"]["n"] >= 10 and res["out_of_sample"]["ci95_net_bps"][0] > 0
     row = next(r for r in res["table"] if r["horizon"] == res["selected"]["horizon"] and r["rule"] == "continuation")
     assert row["all"]["mean_net_bps"] < row["all"]["mean_gross_bps"]  # costs are charged
-    assert len(res["walk_forward"]) == 5
+    assert len(res["walk_forward"]) == 4  # folds 2..5, each selected on the folds before it
 
 
 def test_event_bar_move_itself_is_not_captured():

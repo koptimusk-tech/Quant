@@ -91,30 +91,64 @@ prioridad = base × Q × D × A   (tope 0,49 sin ADJ. P < 0,05 ni apoyo fuera de
 
 Niveles: alta ≥ 0,50, media ≥ 0,25, baja. Pesos y umbrales en `PriorityConfig` (`GET /anomalies/priority-config`).
 Cada anomalía devuelve sus componentes, contribuciones, multiplicadores y una frase con el motivo del orden. Es una
-prioridad de investigación, no de ejecución. Limitaciones: los pesos son una elección razonada, no estimada; la
+prioridad de investigación, no de ejecución. **Los pesos son heurísticos: no se han calibrado con rendimientos
+futuros.** Rareza (R), significación (E), relevancia económica (C), capacidad predictiva (P) y rentabilidad neta de
+una estrategia validada son cosas distintas y se informan por separado. Otras limitaciones: la
 antigüedad se aproxima por la fracción del rango temporal del dataset; la duplicidad solo mira el mismo detector.
 
-### Evaluación predictiva (`qal/anomaly/event_study.py`)
+### Evaluación predictiva (`qal/anomaly/event_study.py`, v2)
 
-`POST /event-studies {dataset_id, detector}` (botón en el detalle):
+`POST /event-studies {dataset_id, detector, related_dataset_id?, horizons?, seed?}` (botón en el detalle) y, para un
+lote reproducible sobre datos reales, `python -m qal.cli predictive-study` (ver más abajo).
 
 1. Vuelve a ejecutar el detector (causal) con los parámetros del último escaneo.
 2. Entrada en la apertura de la primera barra que empieza en o después de `available_ts`; salida en el cierre de la
-   barra h. Eventos cuyo periodo pasa del final de los datos se descartan.
-3. Horizontes por frecuencia (1d: 1, 5, 10, 20 barras); reglas continuación y reversión según el signo del retorno
-   de la barra del evento.
-4. Costes del modelo por clase de activo (`research/costs.py`): comisión, medio spread y slippage fijo por lado, más
-   un 5 % del rango de la barra previa en entrada y salida. Sin costes de financiación a estos horizontes.
-5. Solo eventos independientes (sin solapamiento). Media bruta, coste y neta, IC 95 % por bootstrap con semilla,
-   tasa de aciertos, drawdown máximo y peor operación; deriva incondicional como contexto.
-6. En muestra = 70 % inicial de eventos en el tiempo. BH sobre todas las combinaciones horizonte × regla; se elige la
-   mejor por media neta en muestra y solo esa se mide fuera de muestra. Cinco pliegues walk-forward como estabilidad.
-7. Veredicto: `insufficient_sample` (< 30 eventos independientes o < 10 fuera de muestra), `no_evidence`,
-   `in_sample_only` o `oos_supported` (media neta OOS > 0 con IC por encima de 0 y p ajustado en muestra < 0,05).
-   Ninguno equivale a una estrategia validada: eso exige una hipótesis registrada y las puertas A–D.
+   barra h. Horizontes 1, 5, 10 y 20 barras en todas las frecuencias. Reglas continuación y reversión según el signo
+   del retorno de la barra del evento.
+3. **Benchmark causal.** Exceso = retorno futuro − retorno incondicional medio del mismo horizonte calculado solo con
+   la historia anterior a la entrada (media expansiva, mínimo 100 barras; sin ella el evento no cuenta). v1 no tenía
+   benchmark y la primera versión de v2 usaba la media de toda la muestra (look-ahead); ambos corregidos.
+4. **Evidencia predictiva separada de la rentabilidad.** Selección, p y veredicto usan el exceso, no el neto.
+   Los costes se informan aparte en escenarios: `zero_cost` (referencia), `low_estimate` (×0,5), `base_estimate`
+   (modelo por clase de activo, `research/costs.py`), `high_estimate` (×2) y, si se aporta y se alinea,
+   `historical_spread` (spread de barra de MT5 en la barra previa a la entrada y a la salida, más comisión y
+   slippage). Los escenarios estimados son estimaciones, no costes del bróker; sin swap/financiación.
+5. Solo eventos independientes (sin solapamiento). Media bruta, exceso, IC 95 % por bootstrap (semilla fija y
+   distinta por fila: añadir o quitar horizontes no cambia los IC de las demás filas), tasa de aciertos, peor
+   operación, drawdown máximo y neto por escenario.
+6. Separación temporal estricta: en muestra = operaciones cerradas antes del corte (70 % de los eventos o un corte
+   prerregistrado `split_ts`); fuera de muestra = eventos en o después del corte; las que cruzan el corte se purgan.
+   BH sobre todas las combinaciones horizonte × regla en muestra; se elige la de mayor t del exceso en muestra (con
+   ≥ 10 eventos) y solo esa se mide fuera de muestra. Walk-forward real: en cada pliegue (2–5) la regla se elige solo
+   con los pliegues anteriores.
+7. Veredicto: `insufficient_sample` (< 30 eventos independientes o < 10 fuera de muestra; no se relajan criterios),
+   `no_evidence`, `in_sample_only` u `oos_supported` (exceso OOS > 0 con IC por encima de 0 y p ajustado en muestra
+   < 0,05). `survives_costs_oos` indica por escenario si el neto OOS tiene IC por encima de 0. Ninguno equivale a
+   una estrategia validada: eso exige una hipótesis registrada y las puertas A–D.
+8. Pares (`pair_divergence`, requiere `related_dataset_id`): posición en el spread largo Y, corto β·X con β del
+   momento del evento; se evalúa el comportamiento posterior de la relación (reversión o continuación), nunca el
+   nivel del spread como beneficio, con costes de las dos patas (Y + |β|·X). No se mezclan sintéticos y reales.
+9. `volatility_regime` se evalúa con retornos posteriores, nunca con el nivel de volatilidad.
 
 Los estudios se guardan como experimentos `event_study` (los repetidos con los mismos datos y configuración se
-reutilizan) y cuentan cuántos se han hecho ya sobre el dataset. Los pares no están soportados todavía.
+reutilizan) y cuentan cuántos se han hecho ya sobre el dataset. Las puntuaciones persistidas (STAT., ECON., ADJ. P)
+no cambian; la prioridad sigue leyendo el último veredicto.
+
+**Lote reproducible** (`qal/research/predictive.py`):
+
+```
+python -m qal.cli predictive-study --out predictive_runs [--symbols EURUSD,USDCHF] [--frequencies 1d,1h]
+    [--spread-mt5 --mt5-offset-hours 2] [--spread-csv EURUSD:1h:0.00001:C:\ruta\EURUSD_H1.csv]
+```
+
+Selecciona solo datasets reales (los sintéticos se ignoran y se cuentan), audita cada uno (filas, periodo, paso,
+duplicados, huecos, OHLC, barras sin rango, retornos extremos, barras de fin de semana, retraso de disponibilidad,
+volumen y su tipo, spread), informa de los que faltan con la exportación de MT5 necesaria, ejecuta los detectores por
+separado (volumen solo si es utilizable; par solo con ≥ 500 barras sincronizadas), aplica BH otra vez sobre todas las
+combinaciones del lote y sobre las p fuera de muestra, y escribe `results.json`, `comparison.csv`, `data_audit.json` y
+`report.md` con versión de código, semilla, configuración y hashes de datos. El spread histórico solo se usa si cubre
+≥ 50 % de las barras y sus cierres coinciden con los del dataset en el mismo instante (si no, suele ser un desfase
+horario y se rechaza).
 
 ## Pruebas que respaldan los detectores
 - Recuperación de anomalías sintéticas inyectadas (`tests/test_detectors.py`).

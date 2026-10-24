@@ -101,6 +101,19 @@ export interface EventStudyStats {
   adjusted_pvalue?: number;
   pvalue_one_sided?: number;
   ci95_net_bps?: [number, number] | null;
+  mean_excess_bps?: number;
+  ci95_excess_bps?: [number, number] | null;
+  hit_rate_gross?: number;
+  by_cost?: Record<string, { mean_cost_bps: number; mean_net_bps: number; ci95_net_bps: [number, number] | null; worst_trade_bps: number; max_drawdown_bps: number }>;
+}
+
+export interface CostScenario {
+  name: string;
+  commission_bps: number;
+  half_spread_bps: number;
+  slippage_bps: number;
+  slippage_range_frac: number;
+  source: string;
 }
 
 export interface EventStudy {
@@ -112,12 +125,16 @@ export interface EventStudy {
   entry_rule: string;
   exit_rule: string;
   split_ts?: string | null;
-  table: { horizon: number; rule: string; all: EventStudyStats; in_sample: EventStudyStats }[];
+  table: { horizon: number; rule: string; n_independent?: number; n_out_of_sample?: number; all: EventStudyStats; in_sample: EventStudyStats }[];
   selected?: { horizon: number; rule: string; in_sample: EventStudyStats } | null;
   out_of_sample?: EventStudyStats;
-  walk_forward?: { fold: number; n: number; start: string; end: string; mean_net_bps: number }[];
-  baseline_mean_bps?: Record<string, number>;
-  cost_model?: { fixed_per_side_bps: number; slippage_range_frac: number; note: string };
+  walk_forward?: { fold: number; n: number; start: string; end: string; mean_net_bps?: number | null; mean_excess_bps?: number | null }[];
+  baseline_mean_bps?: Record<string, number | null>;
+  position?: string;
+  cost_scenarios?: CostScenario[];
+  base_cost_scenario?: string;
+  survives_costs_oos?: Record<string, boolean>;
+  cost_model?: { scenarios?: string[]; base?: string; note: string };
   multiple_testing?: string;
   events_dropped_by_horizon?: Record<string, number>;
   is_synthetic?: boolean;
@@ -324,8 +341,11 @@ export const api = {
   facets: () => request<Facets>("/anomalies/facets"),
   anomaly: (id: string) => request<AnomalyDetail>(`/anomalies/${id}`),
   /** Predictive evaluation of one anomaly type on one dataset (stored; identical requests reuse it). */
-  eventStudy: (dataset_id: string, detector: string) =>
-    request<{ id: string; results: EventStudy }>("/event-studies", { method: "POST", body: JSON.stringify({ dataset_id, detector }) }),
+  eventStudy: (dataset_id: string, detector: string, related_dataset_id?: string | null) =>
+    request<{ id: string; results: EventStudy }>("/event-studies", {
+      method: "POST",
+      body: JSON.stringify({ dataset_id, detector, related_dataset_id: related_dataset_id ?? null }),
+    }),
   savedQueries: () => request<SavedQuery[]>("/saved-queries"),
   saveQuery: (name: string, filters: Record<string, unknown>) =>
     request<SavedQuery>("/saved-queries", { method: "POST", body: JSON.stringify({ name, filters }) }),

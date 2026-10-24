@@ -197,8 +197,11 @@ export function ScoreExplanations({ a, study, compact = false }: { a: Anomaly; s
 
 const bps = (v: number | null | undefined) => (v === null || v === undefined || !Number.isFinite(v) ? "—" : v.toFixed(1));
 
+const ci = (c: [number, number] | null | undefined) => (c ? `${bps(c[0])} … ${bps(c[1])}` : "—");
+
 export function EventStudyView({ s }: { s: EventStudy }) {
   const oos = s.out_of_sample;
+  const base = s.base_cost_scenario ?? "base_estimate";
   return (
     <div className="flex flex-col gap-3 text-sm" aria-label="Event study">
       <p>
@@ -206,15 +209,16 @@ export function EventStudyView({ s }: { s: EventStudy }) {
         {s.verdict_text}
       </p>
       <p className="text-xs text-slate-500">
-        {s.n_events} events. Entry: {s.entry_rule.toLowerCase()}; exit: {s.exit_rule.toLowerCase()}. Independent (non-overlapping) events only.
-        {s.split_ts ? ` In-sample before ${s.split_ts.slice(0, 10)}, out of sample after.` : ""} {s.multiple_testing}
+        {s.n_events} events{s.position ? ` (${s.position})` : ""}. Entry: {s.entry_rule.toLowerCase()}; exit: {s.exit_rule.toLowerCase()}. Independent
+        (non-overlapping) events only. Excess = forward return minus the unconditional return of the same horizon, using only history before entry.
+        {s.split_ts ? ` Selection on events before ${s.split_ts.slice(0, 10)}, evaluated once after.` : ""} {s.multiple_testing}
         {s.is_synthetic ? " Synthetic data: results say nothing about real markets." : ""}
       </p>
       <div className="overflow-x-auto">
         <table className="min-w-full text-xs" aria-label="Forward returns by horizon">
           <thead>
             <tr>
-              {["Horizon (bars)", "Rule", "Events", "Gross bps", "Cost bps", "Net bps", "95% CI net", "Hit rate", "Max DD bps", "In-sample adj. p"].map((h) => (
+              {["Horizon (bars)", "Rule", "Events", "Gross bps", "Excess bps", "95% CI excess", `Cost bps (${base})`, "Net bps", "Hit rate", "Max DD bps", "In-sample adj. p"].map((h) => (
                 <th key={h} className="th">{h}</th>
               ))}
             </tr>
@@ -228,9 +232,10 @@ export function EventStudyView({ s }: { s: EventStudy }) {
                   <td className="td">{r.rule}{sel ? " (selected in-sample)" : ""}</td>
                   <td className="td tabular-nums">{r.all.n}</td>
                   <td className="td tabular-nums">{bps(r.all.mean_gross_bps)}</td>
+                  <td className="td tabular-nums">{bps(r.all.mean_excess_bps)}</td>
+                  <td className="td tabular-nums">{ci(r.all.ci95_excess_bps)}</td>
                   <td className="td tabular-nums">{bps(r.all.mean_cost_bps)}</td>
                   <td className="td tabular-nums">{bps(r.all.mean_net_bps)}</td>
-                  <td className="td tabular-nums">{r.all.ci95_net_bps ? `${bps(r.all.ci95_net_bps[0])} … ${bps(r.all.ci95_net_bps[1])}` : "—"}</td>
                   <td className="td tabular-nums">{r.all.hit_rate != null ? `${Math.round(r.all.hit_rate * 100)}%` : "—"}</td>
                   <td className="td tabular-nums">{bps(r.all.max_drawdown_bps)}</td>
                   <td className="td tabular-nums">{fmt(r.in_sample.adjusted_pvalue)}</td>
@@ -241,18 +246,37 @@ export function EventStudyView({ s }: { s: EventStudy }) {
         </table>
       </div>
       {s.selected && oos && (
-        <p>
-          Out of sample ({s.selected.horizon} bars, {s.selected.rule}): {oos.n} events, mean net {bps(oos.mean_net_bps)} bps
-          {oos.ci95_net_bps ? `, 95% CI ${bps(oos.ci95_net_bps[0])} … ${bps(oos.ci95_net_bps[1])}` : ""}
-          {oos.pvalue_one_sided != null ? `, one-sided p ${fmt(oos.pvalue_one_sided)}` : ""}.
-        </p>
+        <div aria-label="Out of sample">
+          <p>
+            Out of sample ({s.selected.horizon} bars, {s.selected.rule}): {oos.n} events, mean excess {bps(oos.mean_excess_bps)} bps
+            {oos.ci95_excess_bps ? `, 95% CI ${ci(oos.ci95_excess_bps)}` : ""}
+            {oos.pvalue_one_sided != null ? `, one-sided p ${fmt(oos.pvalue_one_sided)}` : ""}.
+          </p>
+          {oos.by_cost && (
+            <p className="text-xs text-slate-500">
+              Net by cost scenario:{" "}
+              {Object.entries(oos.by_cost)
+                .map(([k, v]) => `${k} ${bps(v.mean_net_bps)} bps${s.survives_costs_oos?.[k] ? " (CI above 0)" : ""}`)
+                .join(" · ")}
+            </p>
+          )}
+        </div>
       )}
       {s.walk_forward && s.walk_forward.length > 0 && (
         <p className="text-xs text-slate-500">
-          Walk-forward folds (mean net bps): {s.walk_forward.map((f) => `${f.start.slice(0, 10)}: ${bps(f.mean_net_bps)} (n=${f.n})`).join(" · ")}
+          Walk-forward, each fold selected on the folds before it (mean excess bps):{" "}
+          {s.walk_forward.map((f) => `${f.start.slice(0, 10)}: ${bps(f.mean_excess_bps ?? f.mean_net_bps)} (n=${f.n})`).join(" · ")}
         </p>
       )}
-      {s.cost_model && <p className="text-xs text-slate-500">Costs: {fmt(s.cost_model.fixed_per_side_bps)} bps per side + {s.cost_model.slippage_range_frac * 100}% of the bar range. {s.cost_model.note}</p>}
+      {s.cost_scenarios && (
+        <p className="text-xs text-slate-500">
+          Cost scenarios (bps per side, commission + half spread + slippage):{" "}
+          {s.cost_scenarios
+            .map((c) => `${c.name}${c.source === "historical_spread" ? " (historical spread)" : c.source === "estimate" ? " (estimate)" : ""} ${bps(c.commission_bps + c.half_spread_bps + c.slippage_bps)}`)
+            .join(" · ")}
+          . {s.cost_model?.note}
+        </p>
+      )}
     </div>
   );
 }
