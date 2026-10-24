@@ -77,3 +77,34 @@ def test_detections_are_deterministic(syn):
     a = DETECTORS["return_shock"]().run(syn["SYN-C"]).detections
     b = DETECTORS["return_shock"]().run(syn["SYN-C"].copy()).detections
     assert [(d.event_ts, d.statistic) for d in a] == [(d.event_ts, d.statistic) for d in b]
+
+
+def test_tail_extrapolation_lifts_the_rank_floor_only_beyond_the_window():
+    rng = np.random.default_rng(3)
+    x = np.r_[rng.standard_t(4, 400), 40.0]
+    _, _, p = trailing_robust(x, 250)
+    assert p[-1] < 1 / 251 / 10  # far beyond anything seen: rarer than the rank floor
+    inside = p[250:-1]
+    assert inside.min() > 1 / 251 / 50 and (inside >= 0).all()
+
+
+def test_tail_pvalues_are_calibrated_and_bh_quiet_on_a_clean_series():
+    """Fat-tailed i.i.d. noise has no anomalies: small p-values must not be over-produced."""
+    rng = np.random.default_rng(11)
+    x = rng.standard_t(4, 20_000)
+    _, _, p = trailing_robust(x, 250)
+    p = p[np.isfinite(p)]
+    for alpha in (0.01, 0.002):
+        assert (p <= alpha).mean() <= 2 * alpha
+    assert (benjamini_hochberg(p) <= 0.05).sum() == 0
+
+
+def test_a_truly_extreme_shock_survives_multiple_testing():
+    rng = np.random.default_rng(5)
+    x = rng.standard_t(4, 5_000)
+    x[4_000] = 200.0
+    _, _, p = trailing_robust(x, 250)
+    ok = np.isfinite(p)
+    adj = np.full(len(p), np.nan)
+    adj[ok] = benjamini_hochberg(p[ok])
+    assert adj[4_000] < 0.05

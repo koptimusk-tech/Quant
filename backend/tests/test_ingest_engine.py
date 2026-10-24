@@ -91,7 +91,7 @@ def test_scan_records_experiment_with_provenance(session):
     assert exp.status == "succeeded"
     assert exp.n_tests > 10000
     assert {r["content_hash"] for r in exp.data_refs} == {session.get(Dataset, i).content_hash for i in ids.values()}
-    assert "return_shock@1.0.0" in exp.algorithm_version
+    assert "return_shock@1.1.0" in exp.algorithm_version
     anomalies = session.scalars(select(AnomalyDetection).where(AnomalyDetection.experiment_id == exp.id)).all()
     assert len(anomalies) == exp.results["n_anomalies"] > 0
     for a in anomalies:

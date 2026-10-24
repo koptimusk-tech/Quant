@@ -21,7 +21,7 @@ def _bar(df: pd.DataFrame) -> pd.Timedelta:
 
 class ReturnShockDetector(Detector):
     name = "return_shock"
-    version = "1.0.0"
+    version = "1.1.0"
     anomaly_type = "extreme_return"
     description = (
         "Robust z-score of the bar's log return against the median and MAD of the trailing window "
@@ -65,7 +65,7 @@ class ReturnShockDetector(Detector):
 
 class VolumeAnomalyDetector(Detector):
     name = "volume_anomaly"
-    version = "1.0.0"
+    version = "1.1.0"
     anomaly_type = "volume_liquidity"
     description = (
         "Robust z-score of log volume against the trailing window (current bar excluded). Positive = "
@@ -121,7 +121,7 @@ class VolumeAnomalyDetector(Detector):
 
 class VolatilityRegimeDetector(Detector):
     name = "volatility_regime"
-    version = "1.0.0"
+    version = "1.1.0"
     anomaly_type = "volatility_shift"
     description = (
         "Ratio of short-window realised volatility (ending at t) to a long baseline that ends before the "
@@ -183,7 +183,7 @@ class VolatilityRegimeDetector(Detector):
 
 class PairDivergenceDetector(Detector):
     name = "pair_divergence"
-    version = "1.0.0"
+    version = "1.1.0"
     anomaly_type = "cross_asset_divergence"
     pairwise = True
     description = (
