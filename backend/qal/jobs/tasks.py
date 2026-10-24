@@ -134,7 +134,27 @@ def handle_model_experiment(session: Session, payload: dict[str, Any], actor: st
     return {"experiment_id": exp.id, "status": exp.status}
 
 
+def handle_portfolio_run(session: Session, payload: dict[str, Any], actor: str) -> dict[str, Any]:
+    """payload: a portfolio run configuration (``qal.portfolio.service.PortfolioRunIn``)."""
+    from qal.portfolio.service import PortfolioRunIn, run_portfolio
+
+    exp = run_portfolio(session, PortfolioRunIn.model_validate(payload), actor=actor)
+    session.commit()
+    if exp.status == "failed":
+        raise RuntimeError(exp.error or "portfolio run failed")
+    return {"experiment_id": exp.id, "status": exp.status}
+
+
+def handle_portfolio_proposals(session: Session, payload: dict[str, Any], actor: str) -> dict[str, Any]:
+    from qal.portfolio.agent import ProposalRequest, propose
+
+    exp = propose(session, ProposalRequest.model_validate(payload))
+    session.commit()
+    return {"experiment_id": exp.id, "status": exp.status}
+
+
 HANDLERS = {"ingest": handle_ingest, "scan": handle_scan, "ingest_and_scan": handle_ingest_and_scan,
             "validate": handle_validate, "alpha_cycle": handle_alpha_cycle,
-            "model_experiment": handle_model_experiment}
+            "model_experiment": handle_model_experiment, "portfolio_run": handle_portfolio_run,
+            "portfolio_proposals": handle_portfolio_proposals}
 __all__ = ["HANDLERS", "latest_dataset"]
