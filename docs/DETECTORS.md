@@ -16,7 +16,15 @@ barras ≤ t y líneas base que terminan en t-1. Los parámetros por defecto se 
 ## return_shock (`extreme_return`)
 - Estadístico: z robusto `(r_t − mediana) / (MAD·1.4826)` sobre `window` (250) retornos previos.
 - Detección: `|z| ≥ threshold` (5).
-- p empírico: `(1 + #{|r_s − med| ≥ |r_t − med|}) / (window + 1)`. Mínimo 1/251.
+- p empírico: `(1 + #{|r_s − med| ≥ |r_t − med|}) / (window + 1)`.
+- Cola extrapolada (desde v1.1.0, todos los detectores): si la barra supera todo lo visto en la ventana, el p por
+  rango quedaría en su suelo `1/(window+1)` y, con BH sobre decenas de miles de pruebas, ningún evento podría salir
+  significativo. En ese caso se ajusta una cola de Pareto a los `k = max(10, window/10)` mayores valores de la
+  ventana (estimador de Hill) y se usa `(k/(window+1)) · (x/u)^(−1/ξ)`, nunca mayor que el suelo. Supone colas de
+  tipo Pareto y es ruidoso con ventanas cortas. Pruebas: calibración en ruido t(4) sin anomalías (tasa de p ≤ α
+  ≤ 2α y cero rechazos BH) y un choque extremo inyectado que sí supera BH.
+  Consecuencia práctica: con colas gruesas, un salto de ~16 desviaciones en datos horarios (unas 55 000 pruebas)
+  sigue sin ser significativo tras BH; lo es un evento muy por encima de lo que la cola explica.
 - Limitaciones: con agrupamiento de volatilidad una ventana tranquila hace parecer extremos movimientos normales
   (se informa `ewma_vol_z` como contraste).
 
