@@ -108,8 +108,12 @@ def spread_from_mt5_csv(path: str | Path, symbol: str, frequency: str, point: fl
 
 
 def spread_from_mt5_terminal(symbol: str, frequency: str, server_utc_offset_hours: float,
-                             module: Any = None, n_bars: int = 100_000) -> SpreadSource:
-    """Read bar spreads from a running MT5 terminal (Windows only)."""
+                             module: Any = None, n_bars: int = 99_999) -> SpreadSource:
+    """Read bar spreads from a running MT5 terminal (Windows only).
+
+    ``n_bars`` stays below the terminal's "Max bars in chart": asking for exactly that many fails with
+    "Invalid params" (seen with maxbars=100000).
+    """
     mt5 = module
     if mt5 is None:
         import MetaTrader5 as mt5  # type: ignore[import-not-found,no-redef]
@@ -119,6 +123,9 @@ def spread_from_mt5_terminal(symbol: str, frequency: str, server_utc_offset_hour
         if not mt5.symbol_select(symbol, True):
             raise RuntimeError(f"MT5 symbol not available: {symbol}")
         info = mt5.symbol_info(symbol)
+        tinfo = mt5.terminal_info()
+        if tinfo is not None and getattr(tinfo, "maxbars", 0):
+            n_bars = min(n_bars, int(tinfo.maxbars) - 1)
         rates = mt5.copy_rates_from_pos(symbol, getattr(mt5, f"TIMEFRAME_{MT5_TIMEFRAME[frequency]}"), 0, n_bars)
     finally:
         mt5.shutdown()
