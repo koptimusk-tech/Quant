@@ -108,7 +108,8 @@ class Context:
 
 
 def build_context(session: Session, budget: Budget, costs: dict[str, CostModel] | None = None,
-                  actor: str = COORDINATOR) -> Context:
+                  actor: str = COORDINATOR, run_relationships: bool = True) -> Context:
+    """``run_relationships=False`` reuses the latest stored relationship scan instead of computing one (read-only)."""
     q = select(Dataset).where(Dataset.is_latest.is_(True), Dataset.quality_status != "fail")
     if not budget.include_synthetic:
         q = q.where(Dataset.is_synthetic.is_(False))
@@ -132,7 +133,13 @@ def build_context(session: Session, budget: Budget, costs: dict[str, CostModel] 
         key = idea_key(c.get("strategy", {}), [ds_instrument.get(i, i) for i in c.get("dataset_ids", [])])
         existing.setdefault(key, []).append({"id": h.id, "title": h.title, "status": h.status,
                                              "versions_in_family": trials.get(h.family_id, 1)})
-    rel = run_relationship_scan(session, include_synthetic=budget.include_synthetic, actor=actor)
+    if run_relationships:
+        rel = run_relationship_scan(session, include_synthetic=budget.include_synthetic, actor=actor)
+    else:
+        rel = next((e for e in session.scalars(select(Experiment).where(
+            Experiment.kind == "relationship_scan", Experiment.status == "succeeded")
+            .order_by(Experiment.created_at.desc())).all()
+            if (e.config or {}).get("include_synthetic") == budget.include_synthetic), None)
     return Context(session, budget, datasets, by_id, scan_params, anomalies,
                    latest_verdicts(session, list(by_id)), existing, rel,
                    price_universes(session, budget.include_synthetic), costs or {})

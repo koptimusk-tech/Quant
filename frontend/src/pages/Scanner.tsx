@@ -129,6 +129,7 @@ export default function Scanner() {
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="text-lg font-semibold">Market Scanner</h1>
         <span className="text-xs text-slate-500">Anomalies are observations to investigate, not trading signals.</span>
+        <Link to="/alpha#worth" className="text-sm text-indigo-700 underline dark:text-indigo-300">Which are worth testing? →</Link>
         <div className="ml-auto flex gap-2">
           <button className="btn" onClick={runScan} disabled={busy}>
             Scan latest datasets

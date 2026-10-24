@@ -34,6 +34,7 @@ Base: `/api/v1`. Especificación completa OpenAPI en `/api/v1/openapi.json` y UI
 | POST | `/hypotheses/{id}/transition` | Transición manual (rechaza los destinos reservados al motor de políticas). |
 | POST | `/hypotheses/{id}/validate` | Validación walk-forward completa y gates A–D (`run_async` para hacerlo como trabajo). |
 | POST | `/hypotheses/{id}/final-test?confirm=true` | Test final sobre el holdout aislado; incrementa el contador y marca contaminación. |
+| GET | `/alpha/worth-testing?include_synthetic=&dataset_id=` | Qué anomalías e ideas merece la pena testear ahora, con veredicto (`worth_testing`, `already_tested`, `not_worth`, `not_testable`) y motivos. Solo lectura: no registra ni ejecuta nada. |
 | GET | `/alpha/factors?include_synthetic=` | Módulos de factores (definición completa) y si el laboratorio puede probarlos, con qué universo o por qué no. |
 | POST | `/alpha/runs` | `{budget, costs, run_experiments}`: encola un ciclo acotado de los cuatro agentes (trabajo `alpha_cycle`). `budget.llm_tokens` solo admite 0. |
 | GET | `/alpha/runs` · `/alpha/runs/{id}` | Ciclos con sus recuentos; el detalle incluye todos los mensajes tipados de los agentes. |

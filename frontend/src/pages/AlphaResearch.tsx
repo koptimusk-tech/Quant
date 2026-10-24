@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { alpha, type AgentMessage, type AlphaHypothesisRow, type AlphaRun, type FactorModule } from "../api";
+import { alpha, type AgentMessage, type AlphaHypothesisRow, type AlphaRun, type FactorModule, type WorthItem, type WorthTesting } from "../api";
 import { Badge, ErrorBox, Section, fmt, fmtTs } from "../components/ui";
 import { StatusBadge } from "./Research";
 
@@ -13,6 +13,64 @@ export function EvidenceBadge({ level }: { level: string }) {
     error: "run failed",
   };
   return <Badge tone={tone}>{label[level] ?? level}</Badge>;
+}
+
+const VERDICT_TONE = { worth_testing: "green", already_tested: "indigo", not_worth: "red", not_testable: "amber" } as const;
+
+export function VerdictBadge({ item }: { item: WorthItem }) {
+  return <Badge tone={VERDICT_TONE[item.verdict]}>{item.verdict_label}</Badge>;
+}
+
+function WorthRow({ item }: { item: WorthItem }) {
+  const existing = item.existing[item.existing.length - 1];
+  return (
+    <li className="rounded-md border border-slate-200 p-2 dark:border-slate-800">
+      <div className="flex flex-wrap items-center gap-2">
+        <VerdictBadge item={item} />
+        <span className="font-medium">{item.title}</span>
+        {item.score !== null && <span className="text-xs text-slate-500">queue score {fmt(item.score)}</span>}
+        {existing && <Link className="text-xs underline" to={`/alpha/${existing.id}`}>hypothesis · {existing.status}</Link>}
+      </div>
+      <div className="text-xs text-slate-500">{item.origin_observation}</div>
+      <ul className="mt-1 list-disc pl-5 text-sm">
+        {item.reasons.map((r) => <li key={r}>{r}</li>)}
+      </ul>
+    </li>
+  );
+}
+
+export function WorthTestingPanel({ includeSynthetic }: { includeSynthetic: boolean }) {
+  const [w, setW] = useState<WorthTesting | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    alpha.worthTesting(includeSynthetic).then(setW, (e) => setError(e.message));
+  }, [includeSynthetic]);
+  if (error) return <ErrorBox error={error} />;
+  if (!w) return <p className="text-sm text-slate-500">Reviewing the anomalies…</p>;
+  const group = (v: WorthItem["verdict"]) => w.items.filter((x) => x.verdict === v);
+  const worth = group("worth_testing");
+  return (
+    <div id="worth" className="flex flex-col gap-2">
+      <p className="text-sm">
+        <b>{w.counts.worth_testing ?? 0}</b> worth testing · {w.counts.already_tested ?? 0} already tested ·{" "}
+        {w.counts.not_worth ?? 0} not worth testing · {w.counts.not_testable ?? 0} not testable
+      </p>
+      {worth.length ? (
+        <ol className="space-y-2">{worth.map((x) => <WorthRow key={x.key} item={x} />)}</ol>
+      ) : (
+        <p className="text-sm text-slate-500">Nothing is worth testing with the current data and results.</p>
+      )}
+      {(["already_tested", "not_worth", "not_testable"] as const).map((v) =>
+        group(v).length ? (
+          <details key={v}>
+            <summary className="cursor-pointer text-sm">{group(v)[0].verdict_label} ({group(v).length})</summary>
+            <ul className="mt-2 space-y-2">{group(v).map((x) => <WorthRow key={x.key} item={x} />)}</ul>
+          </details>
+        ) : null,
+      )}
+      <ul className="text-xs text-slate-500">{w.notes.map((n) => <li key={n}>{n}</li>)}</ul>
+    </div>
+  );
 }
 
 const ORIGIN: Record<string, string> = {
@@ -70,6 +128,10 @@ export default function AlphaResearchPage() {
       </div>
       <ErrorBox error={error} />
       {notice && <div className="text-sm text-indigo-700 dark:text-indigo-300">{notice}</div>}
+
+      <Section title="Which anomalies are worth testing?">
+        <WorthTestingPanel includeSynthetic={budget.include_synthetic} />
+      </Section>
 
       <Section title="Run a research cycle">
         <div className="flex flex-wrap items-end gap-3 text-sm">

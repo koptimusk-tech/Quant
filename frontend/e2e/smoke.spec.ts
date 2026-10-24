@@ -14,6 +14,7 @@ test("scanner lists synthetic anomalies and opens a reproduced detail", async ({
   }
   await expect(summary.getByText(/^Observed: /)).toBeVisible();
   await expect(summary.getByText(/^Reference: /)).toBeVisible();
+  await expect(page.getByText("Is this anomaly type worth testing?")).toBeVisible();
   await page.getByRole("link", { name: "Data Health" }).click();
   await expect(page.getByRole("heading", { name: "Data Health" })).toBeVisible();
   await expect(page.getByRole("cell", { name: "synthetic", exact: true }).first()).toBeVisible();
