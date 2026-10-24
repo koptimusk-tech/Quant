@@ -42,6 +42,11 @@ Estado: **Fases 0, 1 y 2 completadas, con app de escritorio.** Ver [ROADMAP.md](
   parámetros, estabilidad por ventana y régimen, bootstrap por bloques, placebo, Deflated Sharpe Ratio, PBO,
   comprobaciones de leakage y hard gates A–D deterministas que ningún usuario ni agente puede anular.
 - **Pantallas** Tests (elegir, ejecutar y programar pruebas), Quant Research Lab y Backtesting & Validation.
+- **Portfolio & Risk (Fase 6)**: contrato común de estrategias con reglas de elegibilidad y motivos de rechazo,
+  motor de riesgo (covarianza robusta, correlaciones por régimen y en estrés, contribución al riesgo, exposición
+  look-through por divisa), Equal Weight, Inverse Vol y Risk Budgeting, Hierarchical Risk Manager determinista con
+  políticas versionadas y decisiones auditadas, sizing con lotes y ticks, stress tests y backtest del portfolio sin
+  look-ahead. Ver [docs/PORTFOLIO.md](docs/PORTFOLIO.md).
 - **App de escritorio** (Tauri) que arranca el motor local y abre la interfaz. Instaladores para Windows, macOS y
   Linux sin necesidad de Python, generados en GitHub Actions. Ver [desktop/README.md](desktop/README.md).
 - **Integración continua** (`.github/workflows/ci.yml`): pruebas del backend en SQLite y PostgreSQL, frontend y
@@ -255,6 +260,7 @@ Metodología: [docs/RESEARCH.md](docs/RESEARCH.md).
 - [ROADMAP.md](ROADMAP.md): fases, incluida la app de escritorio.
 - [docs/API.md](docs/API.md): endpoints principales (OpenAPI completo en `/docs`).
 - [docs/RESEARCH.md](docs/RESEARCH.md): contratos, backtesting, validación, gates.
+- [docs/PORTFOLIO.md](docs/PORTFOLIO.md): construcción de portfolios, risk manager, sizing y estrés.
 - [desktop/README.md](desktop/README.md): app de escritorio.
 - [docs/DETECTORS.md](docs/DETECTORS.md): estadísticos, supuestos y limitaciones de cada detector.
 - [docs/DATA_PROVIDERS.md](docs/DATA_PROVIDERS.md): evaluación de proveedores.

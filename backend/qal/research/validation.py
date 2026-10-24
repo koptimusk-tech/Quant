@@ -86,30 +86,43 @@ class Validator:
         return run_backtest(frames, w, self.costs, capital=self.c.capital, asset_class=self.asset_class,
                             names=self.names, cost_multiplier=cost_multiplier)
 
-    def run(self, n_prior_trials: int = 0) -> dict[str, Any]:
+    def walk_forward(self) -> dict[str, Any]:
+        """Backtest every variant on the research period and stitch the walk-forward test windows.
+
+        Each window's variant is chosen on its training bars only; the returned ``oos`` bars and ``oos_pos``
+        positions are the concatenated test windows (the series a portfolio may combine).
+        """
         v = self.c.validation
         variants = self.c.strategy.variants()
-        ppy_holder: dict[str, float] = {}
-        full = []
-        for p in variants:
-            res = self.backtest(self.research, p)
-            ppy_holder["ppy"] = res.periods_per_year
-            full.append(res)
-        ppy = ppy_holder["ppy"]
+        full = [self.backtest(self.research, p) for p in variants]
+        ppy = full[0].periods_per_year
         wins = windows(self.n_research, v.train_bars, v.test_bars, v.embargo_bars)
         if not wins:
             raise ValueError(f"Not enough research bars ({self.n_research}) for train={v.train_bars}, "
                              f"embargo={v.embargo_bars}, test={v.test_bars} before the holdout")
-
-        oos_parts, pos_parts, wrows = [], [], []
-        chosen_idx: list[int] = []
+        oos_parts, pos_parts, chosen_idx, scores_all = [], [], [], []
         for wd in wins:
             scores = [_metric(r.bars.iloc[wd["train_start"]:wd["train_end"]], v.selection_metric, ppy) for r in full]
             best = int(np.argmax(scores))
             chosen_idx.append(best)
-            test_bars = full[best].bars.iloc[wd["test_start"]:wd["test_end"]]
-            oos_parts.append(test_bars)
+            scores_all.append(scores)
+            oos_parts.append(full[best].bars.iloc[wd["test_start"]:wd["test_end"]])
             pos_parts.append(full[best].positions.iloc[wd["test_start"]:wd["test_end"]])
+        oos = pd.concat(oos_parts).reset_index(drop=True)
+        oos_pos = pd.concat(pos_parts).reset_index(drop=True)
+        avail = self.research[0]["available_ts"].to_numpy()
+        idx = np.concatenate([np.arange(w["test_start"], w["test_end"]) for w in wins])
+        oos["available_ts"] = avail[idx]
+        return {"variants": variants, "full": full, "ppy": ppy, "wins": wins, "chosen_idx": chosen_idx,
+                "scores": scores_all, "oos": oos, "oos_pos": oos_pos}
+
+    def run(self, n_prior_trials: int = 0) -> dict[str, Any]:
+        v = self.c.validation
+        wf = self.walk_forward()
+        variants, full, ppy, wins, chosen_idx = wf["variants"], wf["full"], wf["ppy"], wf["wins"], wf["chosen_idx"]
+        wrows = []
+        for wd, best, scores in zip(wins, chosen_idx, wf["scores"], strict=True):
+            test_bars = full[best].bars.iloc[wd["test_start"]:wd["test_end"]]
             tr = extract_trades(full[best].positions.iloc[wd["test_start"]:wd["test_end"]].reset_index(drop=True),
                                 test_bars.reset_index(drop=True), self.names)
             m = summary(test_bars, tr, ppy)
@@ -119,8 +132,8 @@ class Validator:
                           "chosen_params": variants[best], "train_score": scores[best],
                           "test_sharpe_net": m.get("sharpe_net"), "test_mean_net": m.get("mean_net"),
                           "test_trades": m.get("n_trades")})
-        oos = pd.concat(oos_parts).reset_index(drop=True)
-        oos_pos = pd.concat(pos_parts).reset_index(drop=True)
+        oos = wf["oos"].drop(columns="available_ts")
+        oos_pos = wf["oos_pos"]
         oos_trades = extract_trades(oos_pos, oos, self.names)
         breaches = sum(full[i].capacity_breaches for i in set(chosen_idx))  # upper bound across chosen variants
         oos_metrics = summary(oos, oos_trades, ppy, capacity_breaches=0)

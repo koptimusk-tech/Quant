@@ -272,3 +272,40 @@ class AgentMessage(Base):
     payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     evidence: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class RiskPolicy(Base):
+    """Versioned, immutable limits of the Hierarchical Risk Manager. Only a person creates new versions."""
+
+    __tablename__ = "risk_policies"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    name: Mapped[str] = mapped_column(String(64), index=True)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    limits: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    policy_hash: Mapped[str] = mapped_column(String(64))
+    created_by: Mapped[str] = mapped_column(String(64))
+    active: Mapped[bool] = mapped_column(Boolean, default=False)
+    note: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class RiskDecision(Base):
+    """One rule checked by the risk manager: approved or blocked, with observed value, limit and reason."""
+
+    __tablename__ = "risk_decisions"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    run_id: Mapped[str] = mapped_column(ForeignKey("experiments.id"), index=True)
+    policy_id: Mapped[str] = mapped_column(ForeignKey("risk_policies.id"))
+    policy_version: Mapped[str] = mapped_column(String(96))
+    level: Mapped[str] = mapped_column(String(16))  # strategy, group, portfolio
+    scope: Mapped[str] = mapped_column(String(128))
+    rule: Mapped[str] = mapped_column(String(64), index=True)
+    observed: Mapped[str | None] = mapped_column(Text)
+    limit_value: Mapped[str] = mapped_column(Text)
+    decision: Mapped[str] = mapped_column(String(16), index=True)  # approved, blocked
+    action: Mapped[str] = mapped_column(String(256), default="")
+    reason: Mapped[str] = mapped_column(Text)
+    as_of: Mapped[str] = mapped_column(String(40))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

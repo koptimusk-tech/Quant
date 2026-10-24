@@ -783,3 +783,180 @@ export const models = {
   csvUrl: (id: string) => `${BASE}/models/experiments/${id}/export.csv`,
   jsonUrl: (id: string) => `${BASE}/models/experiments/${id}`,
 };
+
+// -- Portfolio & Risk (Phase 6) ---------------------------------------------------------------------
+export interface PortfolioStrategy {
+  id: string;
+  version: number;
+  name: string;
+  source: "hypothesis" | "synthetic";
+  universe: string[];
+  frequency: string;
+  group: string;
+  counterparty: string;
+  is_synthetic: boolean;
+  eligible: boolean;
+  reasons: string[];
+  approval_status: string;
+  limitations: string[];
+  validation: { status: string; oos_metrics: Record<string, number | null>; experiment_id: string | null };
+  history: { start?: string | null; end?: string | null; oos_bars?: number | null };
+}
+
+export interface RiskPolicyOut {
+  id: string;
+  name: string;
+  version: number;
+  label: string;
+  limits: { strategy: Record<string, number>; group: Record<string, number>; portfolio: Record<string, any> };
+  created_by: string;
+  active: boolean;
+  note: string;
+  created_at: string;
+}
+
+export interface PortfolioRunSummary {
+  id: string;
+  status: string;
+  created_at: string;
+  label: string;
+  strategies: string[];
+  methods: string[];
+  policy_version: string | null;
+  is_synthetic: boolean | null;
+  sharpe_net: number | null;
+  max_drawdown: number | null;
+  duration_s: number | null;
+  error: string | null;
+}
+
+export interface Scenario {
+  name: string;
+  kind: "historical" | "hypothetical" | "synthetic";
+  pnl: number;
+  description?: string;
+  basis?: string;
+  start?: string;
+  end?: string;
+  max_drawdown?: number | null;
+}
+
+export interface MonteCarlo {
+  kind: string;
+  name?: string;
+  note?: string;
+  paths?: number;
+  horizon_days?: number;
+  daily?: Record<string, number>;
+  horizon?: Record<string, number>;
+  max_drawdown?: Record<string, number>;
+}
+
+export interface MethodResult {
+  description: string;
+  metrics: Record<string, number | null>;
+  stability: { rebalances: number; mean_abs_change?: number };
+  segments: { first: Record<string, any>; last: Record<string, any>; note: string };
+  blocked: Record<string, number>;
+  curve: { ts: string; equity: number; drawdown: number }[];
+}
+
+export interface Correlations {
+  strategies: string[];
+  observations: number;
+  static?: number[][];
+  static_mean_pairwise?: number | null;
+  rolling?: { min: number | null; max: number | null };
+  regime?: { high_vol: { mean_pairwise: number | null }; low_vol: { mean_pairwise: number | null }; rule: string };
+  stress?: { matrix: number[][] | null; mean_pairwise: number | null; days: number; rule?: string; note: string };
+}
+
+export interface PortfolioRun extends PortfolioRunSummary {
+  config: Record<string, any>;
+  results: {
+    is_synthetic: boolean;
+    synthetic_note: string | null;
+    policy_version: string;
+    primary_method: string;
+    strategies: { id: string; name: string; is_synthetic: boolean }[];
+    rejected: { id: string; name?: string; reasons: string[] }[];
+    period: { start: string; end: string; days: number };
+    methods: Record<string, MethodResult>;
+    primary: { metrics: Record<string, number | null>; n_rebalances: number; weights_history: { ts: string; final: Record<string, number>; blocked_rules: string[] }[] };
+    benchmarks: { naive_equal_weight: Record<string, number | null>; strategies: Record<string, Record<string, number | null>> };
+    cost_sensitivity: { multiplier: number; sharpe_net: number | null; total_return_net: number | null }[];
+    risk: {
+      as_of: string | null;
+      basis: string;
+      weights: Record<string, number>;
+      ex_ante_vol: number;
+      risk_contributions: Record<string, number>;
+      marginal_risk: Record<string, number>;
+      diversification: Record<string, number | null>;
+      exposures: { instrument: Record<string, number>; currency_net: Record<string, number>; market_gross: Record<string, number>; gross: number; net: number };
+      liquidity: { instrument: string; exposure: number; capacity_capital: number | null; note: string | null }[];
+      marginal_analysis: { strategy: string; corr_with_rest: number | null; vol_with?: number; vol_without?: number; enb_with?: number; enb_without?: number; redundant: boolean; adds_risk_without_diversifying?: boolean; max_pair_corr?: number | null; most_correlated_with?: string | null; note?: string }[];
+    };
+    historical_risk: { basis: string; correlations: Correlations; drawdown: Record<string, any>; realised_vol: number | null };
+    stress: { disclaimer: string; historical: Scenario[]; hypothetical: Scenario[]; monte_carlo: MonteCarlo[] };
+    leakage_checks: { check: string; passed: boolean; description: string }[];
+    notes: string[];
+    decisions_stored?: number;
+  };
+}
+
+export interface RiskDecisionOut {
+  as_of: string;
+  level: string;
+  scope: string;
+  rule: string;
+  observed: string | null;
+  limit: string;
+  decision: "approved" | "blocked";
+  action: string;
+  reason: string;
+  policy_version: string;
+}
+
+export interface ProposalRun extends PortfolioRunSummary {
+  results: {
+    proposals: { key: string; experiment_id: string; status: string; verdict: string; blocked_rules: string[]; strategies: string[]; methods: string[]; rationale: string; metrics: Record<string, number | null> }[];
+    candidates: number;
+    eligible: number;
+    is_synthetic: boolean;
+    note: string;
+  };
+  messages?: { seq: number; sender: string; receiver: string; kind: string; subject: string; payload: Record<string, any> }[];
+}
+
+export interface PortfolioRunRequest {
+  strategy_ids: string[];
+  methods: string[];
+  rebalance: string;
+  lookback_days: number;
+  cov_method: string;
+  cost_multiplier: number;
+  criteria: { allow_synthetic: boolean };
+  label?: string;
+}
+
+export const portfolio = {
+  strategies: (includeSynthetic: boolean) =>
+    request<PortfolioStrategy[]>(`/portfolio/strategies?include_synthetic=${includeSynthetic}`, {
+      method: "POST",
+      body: JSON.stringify({ allow_synthetic: includeSynthetic }),
+    }),
+  activePolicy: () => request<RiskPolicyOut>("/portfolio/policies/active"),
+  createPolicy: (body: { limits: RiskPolicyOut["limits"]; approved_by: string; confirm: boolean; note?: string }) =>
+    request<RiskPolicyOut>("/portfolio/policies", { method: "POST", body: JSON.stringify({ ...body, actor_kind: "human" }) }),
+  runs: () => request<PortfolioRunSummary[]>("/portfolio/runs"),
+  run: (id: string) => request<PortfolioRun>(`/portfolio/runs/${id}`),
+  start: (body: PortfolioRunRequest) => request<{ job: Job }>("/portfolio/runs", { method: "POST", body: JSON.stringify(body) }),
+  decisions: (id: string, decision?: string) =>
+    request<{ items: RiskDecisionOut[] }>(`/portfolio/runs/${id}/decisions?limit=500${decision ? `&decision=${decision}` : ""}`),
+  propose: (includeSynthetic: boolean) =>
+    request<{ job: Job }>("/portfolio/proposals", { method: "POST", body: JSON.stringify({ include_synthetic: includeSynthetic }) }),
+  proposals: () => request<ProposalRun[]>("/portfolio/proposals"),
+  proposal: (id: string) => request<ProposalRun>(`/portfolio/proposals/${id}`),
+  jobs: () => request<Job[]>("/jobs?limit=50"),
+};
