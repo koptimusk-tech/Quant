@@ -80,6 +80,12 @@ def _guard(fn, *args, **kw):
         raise HTTPException(404, str(exc)) from exc
 
 
+def _saved(s: Session, ps: PaperSession) -> dict[str, Any]:
+    """Commit before answering, so the next request (often sent right after the response) sees the change."""
+    s.commit()
+    return _out(ps)
+
+
 def _out(ps: PaperSession) -> dict[str, Any]:
     cfg = {k: v for k, v in ps.config.items() if k != "resolved"}
     return {"id": ps.id, "name": ps.name, "status": ps.status, "mode": ps.mode, "is_synthetic": ps.is_synthetic,
@@ -107,7 +113,8 @@ def strategies(s: Session = Depends(get_session)) -> dict[str, Any]:
 
 @router.post("/sessions", status_code=201)
 def create(body: SessionConfig, s: Session = Depends(get_session)) -> dict[str, Any]:
-    return _out(_guard(service.create_session, s, body))
+    ps = _guard(service.create_session, s, body)
+    return _saved(s, ps)
 
 
 @router.get("/sessions")
@@ -132,12 +139,14 @@ def get_one(sid: str, s: Session = Depends(get_session)) -> dict[str, Any]:
 
 @router.post("/sessions/{sid}/start")
 def start(sid: str, body: Actor, s: Session = Depends(get_session)) -> dict[str, Any]:
-    return _out(_guard(service.start, s, _ps(s, sid), body.by))
+    ps = _guard(service.start, s, _ps(s, sid), body.by)
+    return _saved(s, ps)
 
 
 @router.post("/sessions/{sid}/pause")
 def pause(sid: str, body: Actor, s: Session = Depends(get_session)) -> dict[str, Any]:
-    return _out(_guard(service.pause, s, _ps(s, sid), body.by))
+    ps = _guard(service.pause, s, _ps(s, sid), body.by)
+    return _saved(s, ps)
 
 
 @router.post("/sessions/{sid}/step")
@@ -150,7 +159,7 @@ def step(sid: str, body: StepIn, s: Session = Depends(get_session)) -> dict[str,
     if ps.status != "RUNNING":
         raise HTTPException(400, f"session is {ps.status}: start it first")
     res = engine.run(s, ps, body.bars, skip_bad_bar=body.skip_bad_bar)
-    return {"result": res, "session": _out(ps)}
+    return {"result": res, "session": _saved(s, ps)}
 
 
 @router.post("/sessions/{sid}/run", status_code=202)
@@ -164,24 +173,28 @@ def run(sid: str, body: RunIn, s: Session = Depends(get_session)) -> dict[str, A
 
 @router.post("/sessions/{sid}/kill-switch")
 def kill(sid: str, body: KillIn, s: Session = Depends(get_session)) -> dict[str, Any]:
-    return _out(_guard(service.kill_switch, s, _ps(s, sid), active=body.active, by=body.by, confirm=body.confirm,
-                       reason=body.reason))
+    ps = _guard(service.kill_switch, s, _ps(s, sid), active=body.active, by=body.by, confirm=body.confirm,
+                       reason=body.reason)
+    return _saved(s, ps)
 
 
 @router.post("/sessions/{sid}/reset")
 def reset(sid: str, body: ConfirmIn, s: Session = Depends(get_session)) -> dict[str, Any]:
-    return _out(_guard(service.reset, s, _ps(s, sid), body.by, body.confirm))
+    ps = _guard(service.reset, s, _ps(s, sid), body.by, body.confirm)
+    return _saved(s, ps)
 
 
 @router.post("/sessions/{sid}/delete")
 def delete(sid: str, body: ConfirmIn, s: Session = Depends(get_session)) -> dict[str, Any]:
     _guard(service.delete_session, s, _ps(s, sid), body.by, body.confirm)
+    s.commit()
     return {"deleted": sid}
 
 
 @router.patch("/sessions/{sid}/config")
 def change_config(sid: str, body: ConfigChangeIn, s: Session = Depends(get_session)) -> dict[str, Any]:
-    return _out(_guard(service.change_config, s, _ps(s, sid), body.changes, body.by, body.reason))
+    ps = _guard(service.change_config, s, _ps(s, sid), body.changes, body.by, body.reason)
+    return _saved(s, ps)
 
 
 @router.post("/sessions/{sid}/orders", status_code=201)
@@ -189,13 +202,16 @@ def manual_order(sid: str, body: ManualOrderIn, s: Session = Depends(get_session
     o = _guard(service.manual_order, s, _ps(s, sid), OrderIn.model_validate(body.model_dump(exclude={"by"})), body.by)
     if o is None:
         raise HTTPException(409, "an identical order was already created at this bar")
+    s.commit()
     return _order(o)
 
 
 @router.post("/sessions/{sid}/orders/{oid}/cancel")
 def cancel_order(sid: str, oid: str, body: Actor, s: Session = Depends(get_session)) -> dict[str, Any]:
     try:
-        return _order(_guard(service.cancel_order, s, _ps(s, sid), oid, body.by))
+        o = _guard(service.cancel_order, s, _ps(s, sid), oid, body.by)
+        s.commit()
+        return _order(o)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
 
@@ -303,6 +319,7 @@ def run_reconcile(sid: str, body: Actor, s: Session = Depends(get_session)) -> d
     elif not res["ok"]:
         engine.emit(s, ps, "critical", "reconcile", "reconciliation_failed", f"reconciliation failed (run by {body.by})",
                     mismatches=res["mismatches"][:20])
+    s.commit()
     return res
 
 
@@ -311,6 +328,7 @@ def evaluate(sid: str, s: Session = Depends(get_session)) -> dict[str, Any]:
     ps = _ps(s, sid)
     ev = evaluation.evaluate(s, ps)
     service.store_evaluation(s, ps, ev)
+    s.commit()
     return ev
 
 
