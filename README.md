@@ -43,9 +43,98 @@ Estado: **Fases 0, 1 y 2 completadas, con app de escritorio.** Ver [ROADMAP.md](
 - **Integración continua** (`.github/workflows/ci.yml`): pruebas del backend en SQLite y PostgreSQL, frontend y
   extremo a extremo con navegador en cada cambio.
 
-## Arranque rápido (desarrollo, sin Docker)
+## Puesta en marcha en Windows (PowerShell)
 
-Requisitos: Python ≥ 3.11, Node ≥ 20.
+Probado en Windows 11 con Python 3.12 y Node 24. No hace falta ninguna credencial de proveedores financieros: el
+ejemplo usa datos sintéticos etiquetados, y los datos reales se cargan desde un fichero CSV o desde fuentes públicas.
+
+**Requisitos**
+- Python 3.11, 3.12 o 3.13 (python.org o `winget install -e --id Python.Python.3.12`). Comprueba con `py -3.12 --version`.
+- Node.js 20 o superior (`winget install -e --id OpenJS.NodeJS.LTS`). Comprueba con `node --version`.
+- Git (`winget install -e --id Git.Git`).
+- Opcional: MetaTrader 5 instalado y con sesión iniciada, para descargar del terminal.
+
+**1. Instalar** (una vez; unos 5 minutos)
+
+```powershell
+git clone https://github.com/koptimusk-tech/Quant.git C:\Apps\Quant
+cd C:\Apps\Quant
+py -3.12 -m venv .venv
+.\.venv\Scripts\python -m pip install --upgrade pip
+.\.venv\Scripts\pip install -e ".\backend[yahoo,crypto,metatrader,dev]"
+cd frontend
+npm ci
+npm run build
+cd ..
+```
+
+**2. Base de datos y configuración.** No hay que configurar nada: por defecto usa SQLite en
+`backend\var\qal.db` y guarda los datos en `backend\var\data`. Para cambiarlo, copia `.env.example` a
+`backend\.env` y edita las variables:
+
+| Variable | Por defecto | Para qué |
+|---|---|---|
+| `QAL_DATABASE_URL` | `sqlite:///./var/qal.db` | Base de datos (SQLite, o PostgreSQL con `postgresql+psycopg://…`). |
+| `QAL_DATA_DIR` | `./var/data` | Snapshots Parquet de los datos. |
+| `QAL_FRONTEND_DIST` | (vacío) | Carpeta de la interfaz compilada, para servirla desde la API. |
+| `QAL_ENABLE_SCHEDULER` | `true` | Trabajos y programaciones en segundo plano. |
+| `QAL_MT5_TERMINAL_PATH`, `QAL_MT5_LOGIN`… | (vacío) | Solo si MetaTrader 5 no es el terminal con sesión abierta. |
+
+**3. Cargar el dataset de ejemplo.** Son datos SINTÉTICOS con anomalías inyectadas conocidas, y la interfaz los
+marca como `SYNTHETIC`.
+
+```powershell
+cd C:\Apps\Quant\backend
+..\.venv\Scripts\python -m qal.cli demo
+```
+
+**4. Arrancar** (API e interfaz en un solo proceso)
+
+```powershell
+cd C:\Apps\Quant\backend
+$env:QAL_FRONTEND_DIST = "C:\Apps\Quant\frontend\dist"
+..\.venv\Scripts\python -m qal.server --port 8000
+```
+
+Abre http://127.0.0.1:8000. La documentación de la API está en http://127.0.0.1:8000/docs. Para parar, pulsa
+Ctrl+C.
+
+Para desarrollar la interfaz con recarga automática, deja la API anterior en marcha y en otra ventana ejecuta
+`cd C:\Apps\Quant\frontend; npm run dev`. Después abre http://127.0.0.1:5173.
+
+**5. Ejecutar las pruebas**
+
+```powershell
+cd C:\Apps\Quant\backend
+..\.venv\Scripts\python -m pytest -q              # backend (SQLite)
+cd ..\frontend
+npm test                                         # interfaz (Vitest)
+npx playwright install chromium                  # una vez
+$env:QAL_WEB_URL = "http://127.0.0.1:8000"       # con la API del paso 4 en marcha y el demo cargado
+npx playwright test                              # navegador, de extremo a extremo
+```
+
+**6. Cargar datos reales**
+- **Fichero CSV o export de MetaTrader:**
+  1. En MT5, abre *Ver → Símbolos → Barras*.
+  2. Elige el símbolo (p. ej. EURUSD), el periodo (H1, D1…) y las fechas, y pulsa *Solicitar* y luego
+     *Exportar barras*.
+  3. En la app, ve a **Data Health → Load a file** y elige el fichero.
+  4. Escribe el símbolo y el periodo, elige el formato `mt5` e indica la zona horaria del servidor del bróker
+     (p. ej. `Etc/GMT-2` para UTC+2).
+  5. Pulsa **Load file**.
+
+  También vale cualquier CSV con columnas date/time, open, high, low, close y, opcionalmente, volume.
+- **MetaTrader 5 directo:** con el terminal abierto, ve a **Data Health → Download market data** y elige el
+  proveedor *MetaTrader 5 terminal*, el símbolo, la clase `fx` y el periodo.
+- **Yahoo Finance (gratis, sin clave):** en el mismo formulario, elige el proveedor *Yahoo Finance* y un símbolo
+  como `EURUSD=X` o `SPY`.
+
+Después, ve a **Tests**, marca el instrumento y pulsa **Run now**. Las anomalías aparecen en **Market Scanner**.
+
+## Arranque en Linux o macOS (sin Docker)
+
+Requisitos: Python 3.11–3.13 y Node ≥ 20.
 
 ```bash
 make install            # crea .venv, instala backend[all] y el frontend
@@ -59,7 +148,7 @@ Sin `make`:
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -e "./backend[all]"
 cd backend && ../.venv/bin/python -m qal.cli demo
-../.venv/bin/uvicorn qal.api.main:app --port 8000
+../.venv/bin/python -m qal.server --port 8000
 # en otra terminal
 cd frontend && npm install && npm run dev
 ```
@@ -69,14 +158,18 @@ Por defecto usa SQLite en `backend/var/qal.db` y guarda Parquet en `backend/var/
 
 ## Con Docker Compose (PostgreSQL)
 
+Funciona igual en Windows con Docker Desktop.
+
 ```bash
 docker compose up --build
+docker compose exec api python -m qal.cli demo     # opcional: dataset sintético de ejemplo
 # UI: http://localhost:8080   API: http://localhost:8000/docs
 ```
 
-La API aplica las migraciones (`alembic upgrade head`) al arrancar.
+La API aplica las migraciones (`alembic upgrade head`) al arrancar. La integración continua levanta este stack en
+cada cambio, carga el demo y lo consulta a través de la interfaz.
 
-## Descargar datos reales
+## Descargar datos reales por CLI o API
 
 Desde la UI (Data Health → *Download market data*) o por CLI/API:
 

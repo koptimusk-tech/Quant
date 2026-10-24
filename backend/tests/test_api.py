@@ -152,3 +152,71 @@ def test_audit_log_records_actions(client):
     _ingest(client, ("SYN-A",))
     actions = {e["action"] for e in client.get("/api/v1/audit").json()}
     assert "dataset_created" in actions
+
+
+def _csv(rows):
+    return "\n".join(["date,open,high,low,close,volume", *rows])
+
+
+def _random_walk_rows(n, seed=0, shock_at=None):
+    import numpy as np
+
+    rng = np.random.default_rng(seed)
+    px, rows = 100.0, []
+    for i in range(n):
+        r = rng.normal(0, 0.01) + (0.15 if i == shock_at else 0.0)
+        o, px = px, px * float(np.exp(r))
+        d = (datetime(2020, 1, 1) + timedelta(days=i)).strftime("%Y-%m-%d")
+        rows.append(f"{d},{o:.4f},{max(o, px) * 1.002:.4f},{min(o, px) * 0.998:.4f},{px:.4f},{1000 + i % 50}")
+    return rows
+
+
+def test_vertical_slice_from_csv_with_missing_and_duplicate_rows(client):
+    """CSV upload -> validation/normalisation -> features -> detection -> storage -> list/filter -> detail."""
+    rows = _random_walk_rows(600, seed=1, shock_at=450)
+    rows.insert(100, rows[100])                      # exact duplicate: dropped, reported
+    rows[200] = rows[200].split(",")[0] + ",,,,,"    # missing prices: dropped, reported
+    r = client.post("/api/v1/data/upload", files={"file": ("eurusd.csv", _csv(rows), "text/csv")},
+                    data={"symbol": "TEST-CSV", "asset_class": "fx", "frequency": "1d"})
+    assert r.status_code == 200, r.text
+    ds = r.json()["ingested"][0]
+    assert ds["quality_status"] == "warn"
+    checks = {q["check"] for q in client.get(f"/api/v1/datasets/{ds['dataset_id']}/quality").json()}
+    assert "nan_prices" in checks
+
+    exp = client.post("/api/v1/scans", json={"dataset_ids": [ds["dataset_id"]],
+                                             "detectors": {"return_shock": {}}}).json()["experiment"]
+    assert exp["status"] == "succeeded"
+    page = client.get("/api/v1/anomalies", params={"symbol": "TEST-CSV", "detector": "return_shock",
+                                                   "synthetic": False}).json()
+    # Bar 450 is dated 2021-03-26; a daily bar's event_ts is its close, the end of that day.
+    shock = next(a for a in page["items"] if a["event_ts"].startswith("2021-03-27"))
+    s = shock["summary"]
+    assert shock["frequency"] == "1d" and shock["is_synthetic"] is False
+    assert s["observed"] == pytest.approx(shock["metrics"]["log_return"])
+    assert s["reference"] == pytest.approx(shock["metrics"]["baseline_median"])
+    assert s["deviation"] > 10 and s["deviation_unit"] == "robust σ" and "MAD" in s["method"]
+    assert shock["adjusted_pvalue"] < 0.05  # a 15σ move on a clean series survives BH over all bars
+
+    d = client.get(f"/api/v1/anomalies/{shock['id']}").json()
+    assert d["reproduced"] is True and d["anomaly"]["summary"]["observed"] == s["observed"]
+
+
+def test_clean_csv_series_raises_no_significant_alerts(client):
+    rows = _random_walk_rows(1500, seed=7)
+    ds = client.post("/api/v1/data/upload", files={"file": ("clean.csv", _csv(rows), "text/csv")},
+                     data={"symbol": "CLEAN", "asset_class": "fx"}).json()["ingested"][0]
+    client.post("/api/v1/scans", json={"dataset_ids": [ds["dataset_id"]]})
+    items = client.get("/api/v1/anomalies", params={"symbol": "CLEAN", "limit": 500}).json()["items"]
+    assert all(a["adjusted_pvalue"] > 0.05 for a in items)
+
+
+def test_conflicting_duplicates_block_the_scan(client):
+    rows = _random_walk_rows(400, seed=3)
+    date = rows[50].split(",")[0]
+    rows.insert(51, f"{date},1,2,0.5,1.5,10")  # same timestamp, different values
+    ds = client.post("/api/v1/data/upload", files={"file": ("bad.csv", _csv(rows), "text/csv")},
+                     data={"symbol": "BAD", "asset_class": "fx"}).json()["ingested"][0]
+    assert ds["quality_status"] == "fail"
+    exp = client.post("/api/v1/scans", json={"dataset_ids": [ds["dataset_id"]]}).json()["experiment"]
+    assert exp["results"]["n_anomalies"] == 0 and exp["results"]["blocked_by_gate_a"]

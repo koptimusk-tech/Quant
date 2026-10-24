@@ -3,7 +3,9 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
+
+from qal.anomaly.summary import summarize
 
 
 class ORM(BaseModel):
@@ -144,6 +146,12 @@ class AnomalyOut(ORM):
     asset_class: str | None = None
     market: str | None = None
     provider_id: str | None = None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def summary(self) -> dict[str, Any]:
+        """Observed value, statistical reference, deviation and method, uniform across detectors."""
+        return summarize(self.detector, self.metrics, self.statistic)
 
 
 class AnomalyPage(BaseModel):

@@ -218,7 +218,10 @@ export default function Scanner() {
               <th className="th">Type</th>
               <th className="th">Bar</th>
               <th className="th">Dir</th>
-              <th className="th">Statistic</th>
+              <th className="th">Method</th>
+              <th className="th" title="Observed value of the tested quantity">Observed</th>
+              <th className="th" title="Statistical reference from the trailing baseline (current bar excluded)">Reference</th>
+              <th className="th" title="Size of the deviation from the reference">Deviation</th>
               <th className="th cursor-pointer" onClick={() => sortBy("statistical_score")}>Stat. score{arrow("statistical_score")}</th>
               <th className="th cursor-pointer" onClick={() => sortBy("economic_score")}>Econ. score{arrow("economic_score")}</th>
               <th className="th cursor-pointer" onClick={() => sortBy("adjusted_pvalue")} title="Benjamini-Hochberg over every test in the scan">Adj. p{arrow("adjusted_pvalue")}</th>
@@ -243,7 +246,12 @@ export default function Scanner() {
                 <td className="td">{a.anomaly_type}</td>
                 <td className="td">{a.frequency}</td>
                 <td className="td">{a.direction > 0 ? "▲" : a.direction < 0 ? "▼" : "·"}</td>
-                <td className="td tabular-nums">{fmt(a.statistic)}</td>
+                <td className="td text-slate-500">{a.detector}</td>
+                <td className="td tabular-nums" title={a.summary?.observed_label ?? ""}>{fmt(a.summary?.observed)}</td>
+                <td className="td tabular-nums" title={a.summary?.reference_label ?? ""}>{fmt(a.summary?.reference)}</td>
+                <td className="td tabular-nums">
+                  {fmt(a.statistic)} <span className="text-xs text-slate-500">{a.summary?.deviation_unit ?? ""}</span>
+                </td>
                 <td className="td"><ScoreBar value={a.statistical_score} label="statistical score" /></td>
                 <td className="td"><ScoreBar value={a.economic_score} label="economic score" /></td>
                 <td className="td tabular-nums">{fmt(a.adjusted_pvalue)}</td>
