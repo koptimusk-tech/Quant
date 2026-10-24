@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api, type AnomalyPage, type Facets, type SavedQuery } from "../api";
+import { DEFINITIONS, PriorityBadge, ScoreExplanations, SignificanceBadge, StageBadge } from "../components/scores";
 import { Badge, ErrorBox, ScoreBar, SyntheticBadge, fmt, fmtTs } from "../components/ui";
 
 export interface Filters {
@@ -64,6 +65,7 @@ export default function Scanner() {
   const [saved, setSaved] = useState<SavedQuery[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const navigate = useNavigate();
 
@@ -212,6 +214,7 @@ export default function Scanner() {
         <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-800">
           <thead>
             <tr>
+              <th className="th"><span className="sr-only">Explain</span></th>
               <th className="th cursor-pointer" onClick={() => sortBy("event_ts")}>Event (UTC){arrow("event_ts")}</th>
               <th className="th">Instrument</th>
               <th className="th">Class / market</th>
@@ -221,16 +224,32 @@ export default function Scanner() {
               <th className="th">Method</th>
               <th className="th" title="Observed value of the tested quantity">Observed</th>
               <th className="th" title="Statistical reference from the trailing baseline (current bar excluded)">Reference</th>
-              <th className="th" title="Size of the deviation from the reference">Deviation</th>
-              <th className="th cursor-pointer" onClick={() => sortBy("statistical_score")}>Stat. score{arrow("statistical_score")}</th>
-              <th className="th cursor-pointer" onClick={() => sortBy("economic_score")}>Econ. score{arrow("economic_score")}</th>
-              <th className="th cursor-pointer" onClick={() => sortBy("adjusted_pvalue")} title="Benjamini-Hochberg over every test in the scan">Adj. p{arrow("adjusted_pvalue")}</th>
-              <th className="th">Status</th>
+              <th className="th" title={`Size of the deviation from the reference. ${DEFINITIONS.statistic}`}>Deviation</th>
+              <th className="th cursor-pointer" title={DEFINITIONS.stat_score} onClick={() => sortBy("statistical_score")}>Stat. score{arrow("statistical_score")}</th>
+              <th className="th cursor-pointer" title={DEFINITIONS.econ_score} onClick={() => sortBy("economic_score")}>Econ. score{arrow("economic_score")}</th>
+              <th className="th cursor-pointer" onClick={() => sortBy("adjusted_pvalue")} title={DEFINITIONS.adj_p}>Adj. p{arrow("adjusted_pvalue")}</th>
+              <th className="th" title={DEFINITIONS.status}>Status</th>
+              <th className="th cursor-pointer" title={DEFINITIONS.priority} onClick={() => sortBy("investigation_priority")}>Investigation priority{arrow("investigation_priority")}</th>
+              <th className="th" title={DEFINITIONS.stage}>Stage</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
             {data?.items.map((a) => (
-              <tr key={a.id} className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50" onClick={() => navigate(`/anomalies/${a.id}`)}>
+              <Fragment key={a.id}>
+              <tr className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50" onClick={() => navigate(`/anomalies/${a.id}`)}>
+                <td className="td">
+                  <button
+                    className="btn-ghost px-1"
+                    aria-expanded={open === a.id}
+                    aria-label={`Explain scores for ${a.symbol} ${fmtTs(a.event_ts)}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setOpen((o) => (o === a.id ? null : a.id));
+                    }}
+                  >
+                    {open === a.id ? "▾" : "▸"}
+                  </button>
+                </td>
                 <td className="td tabular-nums">{fmtTs(a.event_ts)}</td>
                 <td className="td">
                   <Link to={`/anomalies/${a.id}`} className="font-medium text-indigo-700 dark:text-indigo-300" onClick={(e) => e.stopPropagation()}>
@@ -254,9 +273,19 @@ export default function Scanner() {
                 </td>
                 <td className="td"><ScoreBar value={a.statistical_score} label="statistical score" /></td>
                 <td className="td"><ScoreBar value={a.economic_score} label="economic score" /></td>
-                <td className="td tabular-nums">{fmt(a.adjusted_pvalue)}</td>
+                <td className="td tabular-nums whitespace-nowrap">{fmt(a.adjusted_pvalue)} <SignificanceBadge p={a.adjusted_pvalue} /></td>
                 <td className="td"><Badge>{a.validation_status}</Badge></td>
+                <td className="td whitespace-nowrap"><PriorityBadge priority={a.investigation_priority} /></td>
+                <td className="td"><StageBadge stage={a.stage} /></td>
               </tr>
+              {open === a.id && (
+                <tr>
+                  <td className="td bg-slate-50 dark:bg-slate-900/50" colSpan={17}>
+                    <ScoreExplanations a={a} compact />
+                  </td>
+                </tr>
+              )}
+              </Fragment>
             ))}
           </tbody>
         </table>
@@ -275,7 +304,7 @@ export default function Scanner() {
           <button className="btn-ghost" disabled={(page + 1) * PAGE >= data.total} onClick={() => setPage((p) => p + 1)}>Next</button>
         </div>
       )}
-      {data && <p className="text-xs text-slate-500">{data.total} anomalies. Statistical score ranks the size of the statistic and is not a probability. Economic score compares the move with a placeholder cost assumption and is not a backtest.</p>}
+      {data && <p className="text-xs text-slate-500">{data.total} anomalies. Statistical score ranks the size of the statistic and is not a probability. Economic score compares the move with a placeholder cost assumption and is not a backtest. Investigation priority orders research work and is not an execution signal; open ▸ on a row to see how each score was computed.</p>}
     </div>
   );
 }

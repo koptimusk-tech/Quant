@@ -16,9 +16,12 @@ Base: `/api/v1`. Especificación completa OpenAPI en `/api/v1/openapi.json` y UI
 | GET | `/detectors` | Detectores, versiones y parámetros por defecto. |
 | POST | `/scans` | Ejecuta un escaneo (experimento). Cacheado si datos+config son idénticos; `force` para repetir. |
 | GET | `/experiments` · `/experiments/{id}` | Registro de experimentos (incluye fallidos y vacíos). |
-| GET | `/anomalies` | Filtros: `asset_class`, `market`, `symbol`, `provider`, `frequency`, `anomaly_type`, `detector`, `status`, `min_stat_score`, `min_econ_score`, `synthetic`, `experiment_id`, `latest_scan_only`, `search`; `sort`, `order`, `limit`, `offset`. |
+| GET | `/anomalies` | Filtros: `asset_class`, `market`, `symbol`, `provider`, `frequency`, `anomaly_type`, `detector`, `status`, `min_stat_score`, `min_econ_score`, `synthetic`, `experiment_id`, `latest_scan_only`, `search`; `sort` (incluye `investigation_priority`), `order`, `limit`, `offset`. Cada anomalía incluye `summary`, `explanations` (rareza, significación, desglose económico, capacidad predictiva), `investigation_priority` y `stage`. |
 | GET | `/anomalies/facets` | Valores disponibles para los filtros. |
-| GET | `/anomalies/{id}` | Detalle con barras de contexto, serie del estadístico, distribución de referencia y verificación `reproduced`. |
+| GET | `/anomalies/priority-config` | Pesos, umbrales y topes de la prioridad de investigación. |
+| GET | `/anomalies/{id}` | Detalle con barras de contexto, serie del estadístico, distribución de referencia, verificación `reproduced`, hipótesis relacionadas y el último estudio de eventos. |
+| POST | `/event-studies` | `{dataset_id, detector, horizons?}`: evaluación predictiva del tipo de anomalía (retornos posteriores netos de costes, IC, BH, fuera de muestra). |
+| GET | `/event-studies/{id}` | Resultado guardado de un estudio de eventos. |
 | GET/POST/DELETE | `/saved-queries` | Consultas guardadas. |
 | GET/POST | `/jobs` · GET `/jobs/{id}` · POST `/jobs/{id}/cancel` | Trabajos (`ingest`, `scan`, `ingest_and_scan`, `validate`). |
 | GET/POST/PATCH/DELETE | `/schedules` | Programaciones periódicas (mínimo 60 s). |

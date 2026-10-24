@@ -47,8 +47,81 @@ barras ≤ t y líneas base que terminan en t-1. Los parámetros por defecto se 
 - Una correlación alta no implica spread estacionario; si Engle-Granger no apoya cointegración se añade como
   explicación alternativa.
 
+## Columnas del Market Scanner y su significado
+
+Los valores guardados en cada escaneo no cambian; las explicaciones, la prioridad y la etapa se calculan al leer
+(`qal/anomaly/explain.py`, `qal/anomaly/priority.py`), así que no hace falta migrar la base de datos.
+
+| Columna | Fórmula | Rango | Más alto = | Concepto |
+|---|---|---|---|---|
+| STATISTIC (Deviation) | z robusto (retornos, volumen), log2(vol corta / vol larga) o z del residuo del par | real | más raro | Rareza |
+| STAT. SCORE | \|s\| / (\|s\| + umbral) | [0,5, 1) en eventos guardados | más raro | Rareza (orden, no probabilidad) |
+| ADJ. P | p por rango en la ventana previa (cola de Pareto más allá del máximo) + Benjamini-Hochberg sobre todas las pruebas del escaneo | (0, 1] | **menos** evidencia | Significación |
+| ECON. SCORE | ratio = movimiento / (coste supuesto × patas); ratio / (ratio + 3), ×0,5 con poca liquidez | [0, 1) | movimiento mayor frente al coste | Relevancia económica preliminar |
+| STATUS | `DISCOVERED`; `HYPOTHESIS_FORMULATED` cuando una hipótesis cita la anomalía | — | — | Registro |
+| INVESTIGATION PRIORITY | ver abajo | [0, 1) | investigar antes | Prioridad de investigación |
+| Stage | a partir de las hipótesis que citan la anomalía | detección → investigación → validación OOS → paper trading | — | Etapa |
+
+Significación (indicador visual): fuerte < 0,01, significativa < 0,05, débil < 0,10, no significativa el resto.
+Un ADJ. P cercano a 1 es ausencia de evidencia, no una señal fuerte.
+
+**ECON. SCORE no es interpretable en todos los detectores.** El "movimiento" es el retorno absoluto de la barra en
+`return_shock` y `volume_anomaly`, pero en `volatility_regime` es la volatilidad por barra de la ventana corta (un
+nivel, no un movimiento del evento) y en `pair_divergence` el spread en log. Con un coste FX de 3 pb casi cualquier
+cambio de volatilidad saca 0,8 o más, incluso si la volatilidad baja. La API lo marca con `interpretable: false` y la
+prioridad lo cuenta a la mitad. Faltan, para validar relevancia económica: retornos posteriores, spread y slippage
+reales en el momento del evento, capacidad y confirmación fuera de muestra.
+
+### Prioridad de investigación (`qal/anomaly/priority.py`)
+
+```
+base      = 0,35 E + 0,30 P + 0,20 C + 0,15 R
+prioridad = base × Q × D × A   (tope 0,49 sin ADJ. P < 0,05 ni apoyo fuera de muestra)
+```
+
+| Componente | Cálculo |
+|---|---|
+| E evidencia | min(1, −log10(ADJ. P) / 3); 0 con p = 1 o nulo |
+| P predictiva | estudio de eventos: apoyado OOS 1; solo en muestra 0,4; sin evaluar 0,2; muestra insuficiente 0,1; sin evidencia 0 |
+| C económica | ECON. SCORE, a la mitad si no es interpretable para el detector |
+| R rareza | (STAT. SCORE − 0,5) / 0,5 |
+| Q datos | pass 1, warn/desconocido 0,8, fail 0; ×0,5 si son sintéticos |
+| D duplicidad | 0,6 si hay un evento más fuerte del mismo detector y dataset a ≤ 10 barras en el mismo escaneo |
+| A vigencia | 0,5 + 0,5 · 2^(−antigüedad / 500 barras), antigüedad hasta el final del dataset |
+
+Niveles: alta ≥ 0,50, media ≥ 0,25, baja. Pesos y umbrales en `PriorityConfig` (`GET /anomalies/priority-config`).
+Cada anomalía devuelve sus componentes, contribuciones, multiplicadores y una frase con el motivo del orden. Es una
+prioridad de investigación, no de ejecución. Limitaciones: los pesos son una elección razonada, no estimada; la
+antigüedad se aproxima por la fracción del rango temporal del dataset; la duplicidad solo mira el mismo detector.
+
+### Evaluación predictiva (`qal/anomaly/event_study.py`)
+
+`POST /event-studies {dataset_id, detector}` (botón en el detalle):
+
+1. Vuelve a ejecutar el detector (causal) con los parámetros del último escaneo.
+2. Entrada en la apertura de la primera barra que empieza en o después de `available_ts`; salida en el cierre de la
+   barra h. Eventos cuyo periodo pasa del final de los datos se descartan.
+3. Horizontes por frecuencia (1d: 1, 5, 10, 20 barras); reglas continuación y reversión según el signo del retorno
+   de la barra del evento.
+4. Costes del modelo por clase de activo (`research/costs.py`): comisión, medio spread y slippage fijo por lado, más
+   un 5 % del rango de la barra previa en entrada y salida. Sin costes de financiación a estos horizontes.
+5. Solo eventos independientes (sin solapamiento). Media bruta, coste y neta, IC 95 % por bootstrap con semilla,
+   tasa de aciertos, drawdown máximo y peor operación; deriva incondicional como contexto.
+6. En muestra = 70 % inicial de eventos en el tiempo. BH sobre todas las combinaciones horizonte × regla; se elige la
+   mejor por media neta en muestra y solo esa se mide fuera de muestra. Cinco pliegues walk-forward como estabilidad.
+7. Veredicto: `insufficient_sample` (< 30 eventos independientes o < 10 fuera de muestra), `no_evidence`,
+   `in_sample_only` o `oos_supported` (media neta OOS > 0 con IC por encima de 0 y p ajustado en muestra < 0,05).
+   Ninguno equivale a una estrategia validada: eso exige una hipótesis registrada y las puertas A–D.
+
+Los estudios se guardan como experimentos `event_study` (los repetidos con los mismos datos y configuración se
+reutilizan) y cuentan cuántos se han hecho ya sobre el dataset. Los pares no están soportados todavía.
+
 ## Pruebas que respaldan los detectores
 - Recuperación de anomalías sintéticas inyectadas (`tests/test_detectors.py`).
 - Serie de control sin eventos (`SYN-D`) sin retornos extremos.
 - No look-ahead: truncado en varios puntos y "futuro envenenado" (`tests/test_no_lookahead.py`).
 - Determinismo y reproducción desde el snapshot (`tests/test_ingest_engine.py`, `tests/test_api.py`).
+- Explicaciones, prioridad y estudio de eventos (`tests/test_explain_priority.py`): niveles de significación con p
+  nulo, NaN o 1; el ejemplo de USDCHF desglosado; un ECON. SCORE alto sin evidencia no queda arriba; tope sin
+  significación; multiplicadores; ventaja de continuación conocida detectada fuera de muestra; el movimiento de la
+  propia barra del evento no se captura; el retraso de disponibilidad mueve la entrada; muestras insuficientes.

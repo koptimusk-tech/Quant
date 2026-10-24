@@ -14,7 +14,8 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { api, type AnomalyDetail } from "../api";
+import { api, type AnomalyDetail, type EventStudy } from "../api";
+import { DEFINITIONS, EventStudyView, PriorityBadge, ScoreExplanations, SignificanceBadge, StageBadge } from "../components/scores";
 import { Badge, ErrorBox, KV, QualityBadge, ScoreBar, Section, SyntheticBadge, fmt, fmtTs } from "../components/ui";
 import { chartColors } from "../components/theme";
 
@@ -24,11 +25,29 @@ export default function AnomalyDetailPage() {
   const { id } = useParams();
   const [d, setD] = useState<AnomalyDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [study, setStudy] = useState<EventStudy | null>(null);
+  const [studyBusy, setStudyBusy] = useState(false);
+  const [studyError, setStudyError] = useState<string | null>(null);
   const c = chartColors();
 
-  useEffect(() => {
-    if (id) api.anomaly(id).then(setD, (e) => setError(String(e.message ?? e)));
-  }, [id]);
+  const load = () => {
+    if (id) api.anomaly(id).then((x) => { setD(x); setStudy(x.event_study ?? null); }, (e) => setError(String(e.message ?? e)));
+  };
+  useEffect(load, [id]);
+
+  const runStudy = async () => {
+    if (!d) return;
+    setStudyBusy(true);
+    setStudyError(null);
+    try {
+      await api.eventStudy(d.anomaly.dataset_id, d.anomaly.detector);
+      load(); // refresh priority and stage with the new evidence
+    } catch (e) {
+      setStudyError(String((e as Error).message ?? e));
+    } finally {
+      setStudyBusy(false);
+    }
+  };
 
   const priceData = useMemo(() => {
     if (!d) return [];
@@ -75,6 +94,9 @@ export default function AnomalyDetailPage() {
         </h1>
         {a.is_synthetic && <SyntheticBadge />}
         <Badge>{a.validation_status}</Badge>
+        <StageBadge stage={a.stage} />
+        <PriorityBadge priority={a.investigation_priority} />
+        <SignificanceBadge p={a.adjusted_pvalue} />
         <Link to={`/research?anomaly=${a.id}`} className="btn ml-auto">Investigate → hypothesis</Link>
         {d.reproduced ? (
           <Badge tone="green">✓ reproduced from stored data</Badge>
@@ -111,11 +133,38 @@ export default function AnomalyDetailPage() {
         </Section>
       )}
 
+      <Section title="How to read the scores: rarity, significance, economic relevance, predictive capacity">
+        <ScoreExplanations a={a} study={study} />
+      </Section>
+
+      <Section
+        title="Predictive evaluation (event study of this anomaly type on this dataset)"
+        right={
+          !a.related_dataset_id && (
+            <button className="btn" onClick={runStudy} disabled={studyBusy}>
+              {studyBusy ? "Running…" : study ? "Re-run predictive evaluation" : "Run predictive evaluation"}
+            </button>
+          )
+        }
+      >
+        <ErrorBox error={studyError} />
+        {a.related_dataset_id ? (
+          <p className="text-sm text-slate-500">Event studies of pair divergences are not supported yet.</p>
+        ) : study ? (
+          <EventStudyView s={study} />
+        ) : (
+          <p className="text-sm text-slate-500">
+            Not evaluated. The study re-runs {a.detector} on this dataset, enters at the first open after each event becomes available, and
+            measures forward returns after costs at several horizons, in and out of sample. Nothing is traded.
+          </p>
+        )}
+      </Section>
+
       <div className="grid gap-4 lg:grid-cols-3">
         <Section title="Scores">
           <div className="flex flex-col gap-2 text-sm">
-            <div className="flex items-center justify-between">Statistical (ranking) <ScoreBar value={a.statistical_score} label="statistical" /></div>
-            <div className="flex items-center justify-between">Economic (preliminary) <ScoreBar value={a.economic_score} label="economic" /></div>
+            <div className="flex items-center justify-between" title={DEFINITIONS.stat_score}>Statistical (ranking) <ScoreBar value={a.statistical_score} label="statistical" /></div>
+            <div className="flex items-center justify-between" title={DEFINITIONS.econ_score}>Economic (preliminary) <ScoreBar value={a.economic_score} label="economic" /></div>
             <KV data={{ statistic: a.statistic, "empirical p": a.empirical_pvalue, "BH-adjusted p": a.adjusted_pvalue, "tests in scan": d.experiment.n_tests }} />
           </div>
         </Section>
@@ -224,8 +273,17 @@ export default function AnomalyDetailPage() {
         <Section title="Data quality at detection">
           <KV data={a.data_quality} />
         </Section>
-        <Section title="Related hypotheses and historical results">
-          <p className="text-sm text-slate-500">Create one with “Investigate → hypothesis”; its validations appear in Research Lab.</p>
+        <Section title="Related hypotheses and research stage">
+          <p className="mb-2 text-sm"><StageBadge stage={a.stage} /></p>
+          {d.related_hypotheses.length ? (
+            <ul className="list-disc space-y-1 pl-5 text-sm">
+              {d.related_hypotheses.map((h) => (
+                <li key={h.id}><Link className="underline" to={`/research/${h.id}`}>{h.title}</Link> · {h.status}</li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-slate-500">None yet. Create one with “Investigate → hypothesis”; a strategy is validated only after its walk-forward and Gates A–D.</p>
+          )}
         </Section>
         <Section title="Notes">
           <ul className="list-disc space-y-1 pl-5 text-sm text-slate-600 dark:text-slate-400">

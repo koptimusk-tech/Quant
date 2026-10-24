@@ -31,6 +31,96 @@ export interface Anomaly {
   market: string | null;
   provider_id: string | null;
   summary?: AnomalySummary;
+  explanations?: Explanations;
+  investigation_priority?: Priority | null;
+  stage?: Stage | null;
+}
+
+export interface ScoreComponent {
+  name: string;
+  value: number | string | null;
+  role?: string;
+  source: string;
+  weight?: number;
+  contribution?: number;
+}
+
+/** Four separate concepts: rarity, significance, economic relevance, predictive capacity. */
+export interface Explanations {
+  rarity: { statistic: number; statistical_score: number; threshold: number | null; formula: string; text: string };
+  significance: {
+    level: "strong" | "significant" | "weak" | "not_significant" | "unknown";
+    label: string;
+    adjusted_pvalue: number | null;
+    empirical_pvalue: number | null;
+    text: string;
+    method?: string;
+  };
+  economic: {
+    score: number | null;
+    interpretable: boolean;
+    formula: string;
+    aggregation: string;
+    components: ScoreComponent[];
+    text: string;
+    caveat: string | null;
+    missing: string[];
+    liquidity_flag?: string;
+  };
+  predictive: { text: string };
+}
+
+export interface Priority {
+  value: number;
+  tier: "high" | "medium" | "low";
+  base: number;
+  components: ScoreComponent[];
+  multipliers: { name: string; value: number; source: string }[];
+  capped: boolean;
+  explanation: string;
+  label: string;
+  formula: string;
+  event_study: { experiment_id: string; verdict: string; verdict_text: string; created_at: string } | null;
+}
+
+export interface Stage {
+  stage: "detection" | "investigation" | "oos_failed" | "oos_passed" | "paper_trading_ready";
+  label: string;
+  hypotheses: { id: string; title: string; status: string }[];
+}
+
+export interface EventStudyStats {
+  n: number;
+  mean_gross_bps?: number;
+  mean_cost_bps?: number;
+  mean_net_bps?: number;
+  hit_rate?: number;
+  max_drawdown_bps?: number;
+  worst_trade_bps?: number;
+  pvalue?: number | null;
+  adjusted_pvalue?: number;
+  pvalue_one_sided?: number;
+  ci95_net_bps?: [number, number] | null;
+}
+
+export interface EventStudy {
+  detector: string;
+  horizons: number[];
+  n_events: number;
+  verdict: "insufficient_sample" | "no_evidence" | "in_sample_only" | "oos_supported";
+  verdict_text: string;
+  entry_rule: string;
+  exit_rule: string;
+  split_ts?: string | null;
+  table: { horizon: number; rule: string; all: EventStudyStats; in_sample: EventStudyStats }[];
+  selected?: { horizon: number; rule: string; in_sample: EventStudyStats } | null;
+  out_of_sample?: EventStudyStats;
+  walk_forward?: { fold: number; n: number; start: string; end: string; mean_net_bps: number }[];
+  baseline_mean_bps?: Record<string, number>;
+  cost_model?: { fixed_per_side_bps: number; slippage_range_frac: number; note: string };
+  multiple_testing?: string;
+  events_dropped_by_horizon?: Record<string, number>;
+  is_synthetic?: boolean;
 }
 
 /** Observed value, statistical reference, deviation and method (uniform across detectors). */
@@ -100,7 +190,9 @@ export interface AnomalyDetail {
     quantiles?: Record<string, number>;
     label?: string;
   };
-  related_hypotheses: unknown[];
+  related_hypotheses: { id: string; title: string; status: string }[];
+  event_study?: EventStudy | null;
+  event_study_id?: string | null;
   notes: string[];
 }
 
@@ -231,6 +323,9 @@ export const api = {
   anomalies: (params: Record<string, unknown>) => request<AnomalyPage>(`/anomalies${toQuery(params)}`),
   facets: () => request<Facets>("/anomalies/facets"),
   anomaly: (id: string) => request<AnomalyDetail>(`/anomalies/${id}`),
+  /** Predictive evaluation of one anomaly type on one dataset (stored; identical requests reuse it). */
+  eventStudy: (dataset_id: string, detector: string) =>
+    request<{ id: string; results: EventStudy }>("/event-studies", { method: "POST", body: JSON.stringify({ dataset_id, detector }) }),
   savedQueries: () => request<SavedQuery[]>("/saved-queries"),
   saveQuery: (name: string, filters: Record<string, unknown>) =>
     request<SavedQuery>("/saved-queries", { method: "POST", body: JSON.stringify({ name, filters }) }),

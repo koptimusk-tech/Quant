@@ -5,6 +5,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
+from qal.anomaly.explain import explain
 from qal.anomaly.summary import summarize
 
 
@@ -146,12 +147,24 @@ class AnomalyOut(ORM):
     asset_class: str | None = None
     market: str | None = None
     provider_id: str | None = None
+    investigation_priority: dict[str, Any] | None = Field(
+        default=None, description="Research priority (value, tier, components, multipliers, explanation). "
+                                  "Not a trading signal and not a probability.")
+    stage: dict[str, Any] | None = Field(default=None, description="Detection, investigation, OOS validation or "
+                                                                    "paper-trading readiness, from linked hypotheses")
 
     @computed_field  # type: ignore[prop-decorator]
     @property
     def summary(self) -> dict[str, Any]:
         """Observed value, statistical reference, deviation and method, uniform across detectors."""
         return summarize(self.detector, self.metrics, self.statistic)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def explanations(self) -> dict[str, Any]:
+        """Rarity, significance and economic relevance explained separately from the stored values."""
+        return explain(self.detector, self.statistic, self.statistical_score, self.metrics, self.adjusted_pvalue,
+                       self.empirical_pvalue, self.economic_score, self.economic_context)
 
 
 class AnomalyPage(BaseModel):
