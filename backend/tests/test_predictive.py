@@ -95,3 +95,36 @@ def test_symbol_matching():
     assert predictive.matches("EURUSD=X", "EURUSD") and predictive.matches("EURUSD.m", "EURUSD")
     assert predictive.matches("eur/usd", "EURUSD") and not predictive.matches("EURUSDCHFXYZ", "EURUSD")
     assert not predictive.matches("USDCHF", "EURUSD")
+
+
+def test_mt5_spread_reader_stays_below_max_bars():
+    from types import SimpleNamespace
+
+    asked = {}
+
+    class FakeMT5:
+        TIMEFRAME_H1 = 16385
+
+        def initialize(self):
+            return True
+
+        def shutdown(self):
+            pass
+
+        def symbol_select(self, s, on):
+            return True
+
+        def symbol_info(self, s):
+            return SimpleNamespace(point=1e-5)
+
+        def terminal_info(self):
+            return SimpleNamespace(maxbars=100_000)
+
+        def copy_rates_from_pos(self, s, tf, start, n):
+            asked["n"] = n
+            t = pd.date_range("2024-01-01", periods=3, freq="h", tz="UTC").astype("int64") // 10**9
+            return pd.DataFrame({"time": t, "close": [1.1, 1.1, 1.1], "spread": [10, 12, 0]}).to_records(index=False)
+
+    src = predictive.spread_from_mt5_terminal("EURUSD", "1h", 0, module=FakeMT5(), n_bars=200_000)
+    assert asked["n"] == 99_999  # the terminal rejects a request for exactly maxbars bars
+    assert abs(src.bps.iloc[0] - 10 * 1e-5 / 1.1 * 1e4) < 1e-9
