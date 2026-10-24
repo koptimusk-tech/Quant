@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from qal import __version__
-from qal.api.routers import anomalies, data, hypotheses, jobs, research
+from qal.api.routers import alpha, anomalies, data, hypotheses, jobs, research
 from qal.api.schemas import AuditOut
 from qal.config import get_settings
 from qal.db import create_all, get_engine, get_session
@@ -96,7 +96,7 @@ def create_app() -> FastAPI:
     def audit_log(limit: int = Query(100, le=1000), s: Session = Depends(get_session)):
         return s.scalars(select(AuditEvent).order_by(AuditEvent.created_at.desc()).limit(limit)).all()
 
-    for r in (data.router, anomalies.router, research.router, hypotheses.router, jobs.router):
+    for r in (data.router, anomalies.router, research.router, hypotheses.router, jobs.router, alpha.router):
         v1.include_router(r)
     app.include_router(v1)
     if settings.frontend_dist and Path(settings.frontend_dist, "index.html").is_file():

@@ -250,3 +250,25 @@ class GateDecision(Base):
     evidence: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     policy_version: Mapped[str] = mapped_column(String(16))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class AgentMessage(Base):
+    """Typed message between research agents. Payloads carry references to stored evidence, never free numbers.
+
+    ``kind``: idea, data_gap, formalization, objection, decision, experiment_result. Objections from the
+    adversarial reviewer are kept for every hypothesis, including the ones that were not registered.
+    """
+
+    __tablename__ = "agent_messages"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    run_id: Mapped[str] = mapped_column(ForeignKey("experiments.id"), index=True)
+    seq: Mapped[int] = mapped_column(Integer)
+    sender: Mapped[str] = mapped_column(String(32))
+    receiver: Mapped[str] = mapped_column(String(32))
+    kind: Mapped[str] = mapped_column(String(32), index=True)
+    subject_key: Mapped[str] = mapped_column(String(64), index=True)  # idea key (stable across runs)
+    hypothesis_id: Mapped[str | None] = mapped_column(ForeignKey("hypotheses.id"), index=True)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    evidence: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

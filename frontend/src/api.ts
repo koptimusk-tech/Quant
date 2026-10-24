@@ -479,3 +479,135 @@ export const research = {
   experiment: (id: string) => request<Experiment>(`/experiments/${id}`),
   experiments: (kind?: string) => request<Experiment[]>(`/experiments${toQuery({ kind, limit: 30 })}`),
 };
+
+// ---- Alpha Research: agent cycles ----------------------------------------------------------
+
+export interface AlphaBudget {
+  max_ideas: number;
+  max_hypotheses: number;
+  max_experiments: number;
+  max_variants: number;
+  max_seconds: number;
+  llm_tokens: number;
+  include_synthetic: boolean;
+}
+
+export interface AlphaRun {
+  id: string;
+  status: string;
+  created_at: string;
+  finished_at: string | null;
+  error: string | null;
+  budget: AlphaBudget | null;
+  n_ideas?: number;
+  n_data_gaps?: number;
+  n_registered?: number;
+  n_duplicates?: number;
+  n_rejected_by_review?: number;
+  n_deferred?: number;
+  n_experiments?: number;
+  n_variants_backtested?: number;
+  n_validation_passed?: number;
+  n_validation_failed?: number;
+  relationship_scan_id?: string | null;
+  duration_s?: number;
+  note?: string;
+}
+
+export interface AgentEvidence {
+  kind: string;
+  ref: string;
+  summary: string;
+  values: Record<string, unknown>;
+}
+
+export interface AgentMessage {
+  id: string;
+  run_id: string;
+  seq: number;
+  sender: string;
+  receiver: string;
+  kind: string;
+  subject_key: string;
+  hypothesis_id: string | null;
+  payload: Record<string, any>;
+  evidence: AgentEvidence[];
+  created_at: string;
+}
+
+export interface EvidenceLabels {
+  predictive_evidence: { level: string; text: string };
+  validated_net_profitability: { established: boolean; text: string };
+}
+
+export interface AlphaHypothesisRow extends EvidenceLabels {
+  id: string;
+  title: string;
+  status: string;
+  version: number;
+  created_by: string;
+  created_at: string;
+  origin: string;
+  origin_observation: string;
+  strategy: string;
+  family: string | null;
+  n_source_anomalies: number;
+  objections: { block: number; major: number; minor: number };
+  research_priority: number | null;
+}
+
+export interface ValidationView {
+  experiment_id: string;
+  status: string;
+  created_at: string;
+  error: string | null;
+  decision: string | null;
+  variants: number | null;
+  windows: number;
+  metrics: Record<string, number | null>;
+  benchmark_sharpe_net: number | null;
+  excess_vs_benchmark_mean_net: number | null;
+  sharpe_ci: (number | null)[];
+  positive_window_frac: number | null;
+  placebo_pvalue: number | null;
+  dsr: number | null;
+  pbo: number | null;
+  gates: { gate: string; passed: boolean; reasons: string[] }[] | null;
+  leakage_checks_passed: boolean | null;
+}
+
+export interface AlphaHypothesisDetail extends EvidenceLabels {
+  hypothesis: { id: string; title: string; status: string; version: number; created_by: string; created_at: string; contract: Record<string, any>; contract_hash: string; final_test_accesses: number };
+  idea_key: string;
+  messages: AgentMessage[];
+  objections: { code: string; severity: string; message: string }[];
+  decisions: { key: string; action: string; reason: string; hypothesis_id: string | null; experiment_id: string | null }[];
+  validations: ValidationView[];
+  gates: { gate: string; decision: string; reasons: string[]; experiment_id: string | null; created_at: string }[];
+  eligibility: { eligible: boolean; requirements: { requirement: string; met: boolean; detail: string }[] };
+}
+
+export interface FactorModule {
+  name: string;
+  title: string;
+  data: string;
+  universe: string;
+  formula: string;
+  availability: string;
+  rebalance: string;
+  benchmark: string;
+  available: boolean;
+  reason: string;
+  universes: { symbols: string[]; common_bars: number; asset_class: string; frequency: string }[];
+}
+
+export const alpha = {
+  factors: (includeSynthetic = false) => request<FactorModule[]>(`/alpha/factors${toQuery({ include_synthetic: includeSynthetic })}`),
+  runs: () => request<AlphaRun[]>("/alpha/runs"),
+  run: (id: string) => request<{ run: AlphaRun; messages: AgentMessage[] }>(`/alpha/runs/${id}`),
+  startRun: (budget: Partial<AlphaBudget>) =>
+    request<{ job: Job }>("/alpha/runs", { method: "POST", body: JSON.stringify({ budget }) }),
+  hypotheses: () => request<AlphaHypothesisRow[]>("/alpha/hypotheses"),
+  hypothesis: (id: string) => request<AlphaHypothesisDetail>(`/alpha/hypotheses/${id}`),
+  experiment: (id: string) => request<{ job: Job }>(`/alpha/hypotheses/${id}/experiments`, { method: "POST" }),
+};

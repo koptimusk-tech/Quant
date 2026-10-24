@@ -71,10 +71,13 @@ def test_gross_exposure_is_capped_at_one():
 
 
 @pytest.mark.parametrize("name,params", [("event", {}), ("ts_momentum", {"lookback": 20}),
-                                         ("pair_mean_reversion", {}), ("buy_and_hold", {})])
+                                         ("ts_momentum", {"lookback": 20, "regime": "high_vol"}),
+                                         ("pair_mean_reversion", {}), ("buy_and_hold", {}),
+                                         ("cross_sectional_factor", {"lookback": 120, "skip": 5}),
+                                         ("cross_sectional_factor", {"factor": "low_vol"})])
 def test_strategies_are_causal(syn, name, params):
     cls = STRATEGIES[name]
-    frames = [syn["SYN-B"], syn["SYN-A"]][: cls.n_assets]
+    frames = [syn["SYN-B"], syn["SYN-A"], syn["SYN-C"], syn["SYN-D"]][: cls.n_assets or None]
     full = cls(**params).weights(frames).to_numpy()
     cut = 900
     part = cls(**params).weights([f.iloc[:cut].copy() for f in frames]).to_numpy()

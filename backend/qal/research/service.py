@@ -76,7 +76,7 @@ def prior_trials(session: Session, family_id: str) -> int:
 
 
 def run_validation(session: Session, hyp: Hypothesis, *, actor: str = "api") -> Experiment:
-    transition(session, hyp, "BACKTEST_PENDING", actor=actor, actor_kind="user", reason="validation requested")
+    transition(session, hyp, "EXPERIMENT_PENDING", actor=actor, actor_kind="user", reason="validation requested")
     contract = HypothesisContract.model_validate(hyp.contract)
     n_prior = prior_trials(session, hyp.family_id)
     exp = Experiment(kind="validation", hypothesis_id=hyp.id, status="running",
@@ -91,6 +91,16 @@ def run_validation(session: Session, hyp: Hypothesis, *, actor: str = "api") -> 
         validator, quality, refs = _validator(session, hyp)
         exp.data_refs = refs
         report = validator.run(n_prior_trials=n_prior)
+        # Stages of the run, recorded in order (each one is a policy transition with its evidence).
+        grid = report["robustness"]["param_grid"]
+        best_is = max((g["sharpe_net_in_sample"] for g in grid), default=None)
+        transition(session, hyp, "IN_SAMPLE_EVALUATED", actor="policy_engine", actor_kind="policy",
+                   reason=f"{len(grid)} variant(s) backtested on the research period; best in-sample net Sharpe "
+                          f"{best_is if best_is is None else round(best_is, 3)} (selection only, not evidence)")
+        oos_m = report["oos"]["metrics"]
+        transition(session, hyp, "OUT_OF_SAMPLE_EVALUATED", actor="policy_engine", actor_kind="policy",
+                   reason=f"walk-forward over {len(report['windows'])} test window(s): OOS net Sharpe "
+                          f"{oos_m.get('sharpe_net')}, {oos_m.get('n_trades')} trades; holdout untouched")
         gates = evaluate_gates(contract, report, quality)
         for g in gates:
             session.add(GateDecision(hypothesis_id=hyp.id, experiment_id=exp.id, gate=g.gate,

@@ -23,7 +23,7 @@ Base: `/api/v1`. Especificación completa OpenAPI en `/api/v1/openapi.json` y UI
 | POST | `/event-studies` | `{dataset_id, detector, related_dataset_id?, horizons?, seed?}`: evaluación predictiva v2 del tipo de anomalía (exceso sobre benchmark causal, IC, BH, fuera de muestra purgado, walk-forward, escenarios de coste; pares con `related_dataset_id`). |
 | GET | `/event-studies/{id}` | Resultado guardado de un estudio de eventos. |
 | GET/POST/DELETE | `/saved-queries` | Consultas guardadas. |
-| GET/POST | `/jobs` · GET `/jobs/{id}` · POST `/jobs/{id}/cancel` | Trabajos (`ingest`, `scan`, `ingest_and_scan`, `validate`). |
+| GET/POST | `/jobs` · GET `/jobs/{id}` · POST `/jobs/{id}/cancel` | Trabajos (`ingest`, `scan`, `ingest_and_scan`, `validate`, `alpha_cycle`). |
 | GET/POST/PATCH/DELETE | `/schedules` | Programaciones periódicas (mínimo 60 s). |
 | GET | `/audit` | Eventos de auditoría. |
 | GET | `/strategies` | Tipos de estrategia, parámetros y número de activos. |
@@ -34,6 +34,13 @@ Base: `/api/v1`. Especificación completa OpenAPI en `/api/v1/openapi.json` y UI
 | POST | `/hypotheses/{id}/transition` | Transición manual (rechaza los destinos reservados al motor de políticas). |
 | POST | `/hypotheses/{id}/validate` | Validación walk-forward completa y gates A–D (`run_async` para hacerlo como trabajo). |
 | POST | `/hypotheses/{id}/final-test?confirm=true` | Test final sobre el holdout aislado; incrementa el contador y marca contaminación. |
+| GET | `/alpha/factors?include_synthetic=` | Módulos de factores (definición completa) y si el laboratorio puede probarlos, con qué universo o por qué no. |
+| POST | `/alpha/runs` | `{budget, costs, run_experiments}`: encola un ciclo acotado de los cuatro agentes (trabajo `alpha_cycle`). `budget.llm_tokens` solo admite 0. |
+| GET | `/alpha/runs` · `/alpha/runs/{id}` | Ciclos con sus recuentos; el detalle incluye todos los mensajes tipados de los agentes. |
+| GET | `/alpha/relationships/{id}` | Resultado completo de una búsqueda de relaciones (todas las parejas y todas las pruebas). |
+| GET | `/alpha/hypotheses` · `/alpha/hypotheses/{id}` | Hipótesis con origen, objeciones y, por separado, prioridad de investigación, evidencia predictiva y rentabilidad neta validada; el detalle compara experimentos y explica cada decisión. |
+| POST | `/alpha/hypotheses/{id}/experiments` | Encola una validación del contrato congelado. |
+| GET/POST | `/alpha/hypotheses/{id}/paper-eligibility` | Requisitos para `PAPER_TRADING_ELIGIBLE` y aprobación explícita de una persona con límites de riesgo. No envía órdenes. |
 
 Ejemplo de escaneo con un par:
 

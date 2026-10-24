@@ -105,6 +105,20 @@ def handle_validate(session: Session, payload: dict[str, Any], actor: str) -> di
     return {"experiment_id": exp.id, "decision": exp.results.get("decision"), "status": hyp.status}
 
 
+def handle_alpha_cycle(session: Session, payload: dict[str, Any], actor: str) -> dict[str, Any]:
+    """payload: {"budget": {...}, "costs": {symbol: cost model}, "run_experiments": bool}."""
+    from qal.alpha.agents import ResearchCoordinator
+    from qal.alpha.messages import Budget
+    from qal.research.costs import CostModel
+
+    run = ResearchCoordinator().run_cycle(
+        session, Budget(**payload.get("budget", {})), actor=actor,
+        costs={k: CostModel(**v) for k, v in (payload.get("costs") or {}).items()},
+        run_experiments=payload.get("run_experiments", True))
+    session.commit()
+    return {"run_id": run.id, **{k: v for k, v in run.results.items() if k.startswith("n_")}}
+
+
 HANDLERS = {"ingest": handle_ingest, "scan": handle_scan, "ingest_and_scan": handle_ingest_and_scan,
-            "validate": handle_validate}
+            "validate": handle_validate, "alpha_cycle": handle_alpha_cycle}
 __all__ = ["HANDLERS", "latest_dataset"]

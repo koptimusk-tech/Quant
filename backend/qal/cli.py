@@ -7,6 +7,7 @@
     python -m qal.cli scan --all
     python -m qal.cli worker                   # run jobs and schedules without the API
     python -m qal.cli predictive-study --out runs   # event studies on the real EURUSD/USDCHF datasets
+    python -m qal.cli alpha-cycle --out alpha_runs  # one bounded cycle of the research agents
 """
 
 from __future__ import annotations
@@ -24,7 +25,7 @@ from qal.config import get_settings
 from qal.data.ingest import IngestRequest, ingest
 from qal.data.store import ParquetStore
 from qal.db import create_all, session_scope
-from qal.models import Dataset
+from qal.models import Dataset, Experiment
 
 
 def cmd_demo(args: argparse.Namespace) -> None:
@@ -100,6 +101,35 @@ def cmd_predictive(args: argparse.Namespace) -> None:
                                    for c in r["comparison"]]}, indent=2))
 
 
+def cmd_alpha_cycle(args: argparse.Namespace) -> None:
+    from qal.alpha.agents import ResearchCoordinator
+    from qal.alpha.messages import Budget
+    from qal.alpha.report import hypothesis_detail, run_detail
+    from qal.models import Hypothesis
+    from qal.research.costs import CostModel
+
+    create_all()
+    costs = {k: CostModel(**v) for k, v in json.loads(Path(args.costs).read_text()).items()} if args.costs else {}
+    budget = Budget(max_ideas=args.max_ideas, max_hypotheses=args.max_hypotheses,
+                    max_experiments=args.max_experiments, max_variants=args.max_variants,
+                    max_seconds=args.max_seconds)
+    with session_scope() as s:
+        run = ResearchCoordinator().run_cycle(s, budget, actor="cli", costs=costs,
+                                              run_experiments=not args.no_experiments)
+        s.flush()
+        detail = run_detail(s, run)
+        hyp_ids = {m["hypothesis_id"] for m in detail["messages"] if m["hypothesis_id"]}
+        detail["hypotheses"] = [hypothesis_detail(s, s.get(Hypothesis, h)) for h in sorted(hyp_ids)]
+        rel = s.get(Experiment, run.results["relationship_scan_id"]) if run.results.get("relationship_scan_id") else None
+        detail["relationship_scan"] = {"id": rel.id, **rel.results} if rel else None
+        if args.out:
+            out = Path(args.out) / f"alpha_{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}"
+            out.mkdir(parents=True, exist_ok=True)
+            (out / "alpha_run.json").write_text(json.dumps(detail, indent=2, default=str))
+            print(f"written {out / 'alpha_run.json'}")
+        print(json.dumps(detail["run"], indent=2, default=str))
+
+
 def cmd_worker(args: argparse.Namespace) -> None:
     from qal.jobs.runner import process_once
 
@@ -148,6 +178,16 @@ def main() -> None:
     pv.add_argument("--spread-mt5", action="store_true", help="read bar spreads from the running MT5 terminal")
     pv.add_argument("--mt5-offset-hours", type=float, default=0.0, help="broker server time minus UTC")
     pv.set_defaults(fn=cmd_predictive)
+    ac = sub.add_parser("alpha-cycle", help="one bounded research cycle of the four research agents")
+    ac.add_argument("--max-ideas", type=int, default=40)
+    ac.add_argument("--max-hypotheses", type=int, default=12)
+    ac.add_argument("--max-experiments", type=int, default=6)
+    ac.add_argument("--max-variants", type=int, default=120)
+    ac.add_argument("--max-seconds", type=float, default=900)
+    ac.add_argument("--no-experiments", action="store_true", help="register hypotheses but do not validate them")
+    ac.add_argument("--costs", help="JSON file {symbol: cost model} with the account's real costs")
+    ac.add_argument("--out", default="alpha_runs", help="directory for the full JSON report; empty to skip")
+    ac.set_defaults(fn=cmd_alpha_cycle)
     args = p.parse_args()
     args.fn(args)
 

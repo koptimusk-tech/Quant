@@ -4,7 +4,14 @@ import { api, research, type DatasetRow, type Hypothesis, type Proposal, type St
 import { Badge, ErrorBox, Section, SyntheticBadge, fmtTs } from "../components/ui";
 
 export function StatusBadge({ status }: { status: string }) {
-  const tone = status === "VALIDATION_PASSED" ? "green" : status === "VALIDATION_FAILED" || status === "REJECTED" ? "red" : status === "BACKTEST_PENDING" ? "amber" : "slate";
+  const tone =
+    status === "VALIDATION_PASSED" || status === "PAPER_TRADING_ELIGIBLE"
+      ? "green"
+      : status === "VALIDATION_FAILED" || status === "REJECTED"
+        ? "red"
+        : ["BACKTEST_PENDING", "EXPERIMENT_PENDING", "IN_SAMPLE_EVALUATED", "OUT_OF_SAMPLE_EVALUATED"].includes(status)
+          ? "amber"
+          : "slate";
   return <Badge tone={tone}>{status}</Badge>;
 }
 

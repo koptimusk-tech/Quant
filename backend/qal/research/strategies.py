@@ -22,7 +22,7 @@ from qal.features.basic import log_returns
 class Strategy(ABC):
     name: ClassVar[str]
     description: ClassVar[str]
-    n_assets: ClassVar[int] = 1  # 2 for pair strategies
+    n_assets: ClassVar[int] = 1  # 2 for pair strategies, 0 for a cross-sectional universe (3 or more)
     defaults: ClassVar[dict[str, Any]]
 
     def __init__(self, **params: Any):
@@ -82,8 +82,10 @@ class EventStrategy(Strategy):
 
 class TimeSeriesMomentum(Strategy):
     name = "ts_momentum"
-    description = "Sign of the trailing lookback return (long/short or long/flat), optionally volatility-targeted."
-    defaults = {"lookback": 60, "long_only": False, "vol_target": None, "vol_window": 20}
+    description = ("Sign of the trailing lookback return (long/short or long/flat), optionally volatility-targeted "
+                   "and optionally active only in one volatility regime (short/long realised volatility ratio).")
+    defaults = {"lookback": 60, "long_only": False, "vol_target": None, "vol_window": 20, "regime": "all",
+                "regime_short": 20, "regime_long": 250}
 
     def weights(self, frames: list[pd.DataFrame]) -> pd.DataFrame:
         df = frames[0]
@@ -95,6 +97,13 @@ class TimeSeriesMomentum(Strategy):
         if self.params["vol_target"]:
             vol = r.rolling(int(self.params["vol_window"])).std()
             w = (w * float(self.params["vol_target"]) / vol).clip(-1, 1).fillna(0.0)
+        regime = self.params["regime"]
+        if regime not in ("all", "high_vol", "low_vol"):
+            raise ValueError("ts_momentum: regime must be all, high_vol or low_vol")
+        if regime != "all":  # trailing volatility ratio known at t's close; NaN during warm-up -> flat
+            ratio = r.rolling(int(self.params["regime_short"])).std() / r.rolling(int(self.params["regime_long"])).std()
+            on = ratio > 1 if regime == "high_vol" else ratio <= 1
+            w = w.where(on, 0.0)
         return pd.DataFrame({0: w.to_numpy()})
 
 
@@ -135,6 +144,54 @@ class PairMeanReversion(Strategy):
         return pd.DataFrame({0: wy, 1: wx})
 
 
+class CrossSectionalFactor(Strategy):
+    """Long the top and short the bottom of a universe ranked by a price-based factor (dollar neutral).
+
+    Scores use returns up to and including bar t (decided at t's close, executed at t+1's open) and are
+    refreshed every ``rebalance_bars``. Factors: ``momentum`` = sum of log returns from t-lookback to
+    t-skip; ``low_vol`` = minus the standard deviation of returns over ``vol_window``.
+    """
+
+    name = "cross_sectional_factor"
+    n_assets = 0  # a universe of 3 or more
+    description = ("Rank the universe by a price factor (momentum: trailing return skipping the latest bars; low_vol: "
+                   "lowest trailing volatility first); long the top quantile, short the bottom, equal weights, "
+                   "gross exposure 1, rebalanced every rebalance_bars.")
+    defaults = {"factor": "momentum", "lookback": 252, "skip": 21, "vol_window": 63, "rebalance_bars": 21,
+                "quantile": 0.34}
+
+    def weights(self, frames: list[pd.DataFrame]) -> pd.DataFrame:
+        if self.params["factor"] not in ("momentum", "low_vol"):
+            raise ValueError("cross_sectional_factor: factor must be momentum or low_vol")
+        r = pd.concat([log_returns(f).reset_index(drop=True) for f in frames], axis=1).fillna(0.0)
+        r.columns = range(len(frames))
+        if self.params["factor"] == "momentum":
+            lb, sk = int(self.params["lookback"]), int(self.params["skip"])
+            score = r.rolling(lb - sk).sum().shift(sk)
+            warm = lb
+        else:
+            vw = int(self.params["vol_window"])
+            score = -r.rolling(vw).std()
+            warm = vw
+        k = max(1, int(np.floor(len(frames) * float(self.params["quantile"]))))
+        reb = int(self.params["rebalance_bars"])
+        W = np.zeros((len(r), len(frames)))
+        cur = np.zeros(len(frames))
+        for i in range(len(r)):
+            if i >= warm and (i - warm) % reb == 0:
+                row = score.iloc[i].to_numpy()
+                cur = np.zeros(len(frames))
+                if np.isfinite(row).sum() >= 2 * k:
+                    order = np.argsort(np.where(np.isfinite(row), row, np.nan))
+                    valid = [j for j in order if np.isfinite(row[j])]
+                    for j in valid[-k:]:
+                        cur[j] = 0.5 / k
+                    for j in valid[:k]:
+                        cur[j] = -0.5 / k
+            W[i] = cur
+        return pd.DataFrame(W)
+
+
 class BuyAndHold(Strategy):
     name = "buy_and_hold"
     description = "Fully invested long. Used as benchmark."
@@ -145,5 +202,5 @@ class BuyAndHold(Strategy):
 
 
 STRATEGIES: dict[str, type[Strategy]] = {
-    s.name: s for s in (EventStrategy, TimeSeriesMomentum, PairMeanReversion, BuyAndHold)
+    s.name: s for s in (EventStrategy, TimeSeriesMomentum, PairMeanReversion, CrossSectionalFactor, BuyAndHold)
 }
