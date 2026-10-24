@@ -115,7 +115,7 @@ def cmd_alpha_cycle(args: argparse.Namespace) -> None:
                     max_seconds=args.max_seconds)
     with session_scope() as s:
         run = ResearchCoordinator().run_cycle(s, budget, actor="cli", costs=costs,
-                                              run_experiments=not args.no_experiments)
+                                              run_experiments=not args.no_experiments, checkpoint=s.commit)
         s.flush()
         detail = run_detail(s, run)
         hyp_ids = {m["hypothesis_id"] for m in detail["messages"] if m["hypothesis_id"]}

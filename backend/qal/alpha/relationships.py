@@ -101,8 +101,6 @@ def run_relationship_scan(session: Session, *, include_synthetic: bool = False, 
     exp = Experiment(kind="relationship_scan", status="running", algorithm_version=f"relationship_scan@{VERSION}",
                      code_version=code_version(), config=config, config_hash=config_hash, seed=0,
                      data_refs=[{"dataset_id": i, "content_hash": h} for i, h in data])
-    session.add(exp)
-    session.flush()
     rows: list[dict[str, Any]] = []
     closes: dict[str, pd.Series] = {}
     for (freq, ac, syn), group in groups.items():
@@ -146,6 +144,8 @@ def run_relationship_scan(session: Session, *, include_synthetic: bool = False, 
                 "formulate a hypothesis, not evidence that a trading rule works.",
     }
     exp.status = "succeeded"
+    session.add(exp)  # added once computed: the tests run without holding the database write lock
+    session.flush()
     exp.finished_at = datetime.now(UTC)
     audit.record(session, actor, "relationship_scan_finished", "experiment", exp.id, n_tests=exp.n_tests)
     return exp

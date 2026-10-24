@@ -114,7 +114,7 @@ def handle_alpha_cycle(session: Session, payload: dict[str, Any], actor: str) ->
     run = ResearchCoordinator().run_cycle(
         session, Budget(**payload.get("budget", {})), actor=actor,
         costs={k: CostModel(**v) for k, v in (payload.get("costs") or {}).items()},
-        run_experiments=payload.get("run_experiments", True))
+        run_experiments=payload.get("run_experiments", True), checkpoint=session.commit)
     session.commit()
     return {"run_id": run.id, **{k: v for k, v in run.results.items() if k.startswith("n_")}}
 

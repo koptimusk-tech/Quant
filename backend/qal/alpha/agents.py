@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import hashlib
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
@@ -582,8 +583,12 @@ class ResearchCoordinator:
         self.researcher, self.analyst, self.reviewer = AlphaResearcher(), QuantAnalyst(), AdversarialReviewer()
 
     def run_cycle(self, session: Session, budget: Budget | None = None, *, actor: str = COORDINATOR,
-                  costs: dict[str, CostModel] | None = None, run_experiments: bool = True) -> Experiment:
+                  costs: dict[str, CostModel] | None = None, run_experiments: bool = True,
+                  checkpoint: Callable[[], None] | None = None) -> Experiment:
+        """``checkpoint`` (e.g. ``session.commit``) is called after each stage, so a long cycle does not hold the
+        database write lock from start to end; by default the session is only flushed."""
         budget = budget or Budget()
+        checkpoint = checkpoint or session.flush
         t0 = time.perf_counter()
         ctx = build_context(session, budget, costs, actor=f"agent:{COORDINATOR}")
         config = {"version": VERSION, "budget": budget.model_dump(), "run_experiments": run_experiments,
@@ -597,6 +602,7 @@ class ResearchCoordinator:
                          data_refs=[{"dataset_id": i, "content_hash": h} for i, h in state["data"]])
         session.add(run)
         session.flush()
+        checkpoint()
         seq = [0]
 
         def post(sender: str, receiver: str, kind: str, msg: BaseModel, key: str, hyp_id: str | None = None,
@@ -662,6 +668,7 @@ class ResearchCoordinator:
                             reason=f"{len(major)} major and {len(objections) - len(major)} minor objection(s) "
                                    "recorded; no blocking objection"), hyp.id)
 
+        checkpoint()
         n_exp = variants = 0
         if run_experiments:
             for idea, hyp in registered:  # already in priority order
@@ -698,6 +705,7 @@ class ResearchCoordinator:
                 decisions.append(Decision(key=idea.key, action="experiment_run" if exp.status == "succeeded"
                                           else "experiment_failed", hypothesis_id=hyp.id, experiment_id=exp.id,
                                           reason=hyp.status))
+                checkpoint()
 
         count = lambda a: sum(d.action == a for d in decisions)
         run.n_tests = variants
