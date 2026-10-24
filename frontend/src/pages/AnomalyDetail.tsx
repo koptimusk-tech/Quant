@@ -86,6 +86,31 @@ export default function AnomalyDetailPage() {
         Event {fmtTs(a.event_ts)} · available {fmtTs(a.available_ts)} · {a.frequency} bars · detector {a.detector}@{a.detector_version}
       </p>
 
+      {a.summary && (
+        <Section title="Detection summary">
+          <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2 lg:grid-cols-4" aria-label="Detection summary">
+            {[
+              ["Instrument", `${a.symbol ?? a.instrument_id}${a.related_symbol ? ` vs ${a.related_symbol}` : ""}`],
+              ["Timeframe", a.frequency],
+              ["Date (UTC)", fmtTs(a.event_ts)],
+              [`Observed: ${a.summary.observed_label ?? "value"}`, fmt(a.summary.observed)],
+              [
+                `Reference: ${a.summary.reference_label ?? ""}`,
+                `${fmt(a.summary.reference)}${a.summary.reference_scale != null ? ` ± ${fmt(a.summary.reference_scale)}` : ""}`,
+              ],
+              ...(a.summary.relative != null ? [[a.summary.relative_label ?? "relative", fmt(a.summary.relative)]] : []),
+              ["Deviation", `${fmt(a.summary.deviation)} ${a.summary.deviation_unit}`],
+              ["Method", `${a.detector}@${a.detector_version}: ${a.summary.method}`],
+            ].map(([k, v]) => (
+              <div key={k}>
+                <dt className="text-xs text-slate-500">{k}</dt>
+                <dd className="tabular-nums">{v}</dd>
+              </div>
+            ))}
+          </dl>
+        </Section>
+      )}
+
       <div className="grid gap-4 lg:grid-cols-3">
         <Section title="Scores">
           <div className="flex flex-col gap-2 text-sm">
@@ -200,7 +225,7 @@ export default function AnomalyDetailPage() {
           <KV data={a.data_quality} />
         </Section>
         <Section title="Related hypotheses and historical results">
-          <p className="text-sm text-slate-500">None yet. Hypothesis contracts and backtests arrive in Phase 2.</p>
+          <p className="text-sm text-slate-500">Create one with “Investigate → hypothesis”; its validations appear in Research Lab.</p>
         </Section>
         <Section title="Notes">
           <ul className="list-disc space-y-1 pl-5 text-sm text-slate-600 dark:text-slate-400">

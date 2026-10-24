@@ -147,8 +147,9 @@ export default function DataHealthPage() {
             Install: <code>{selected.install}</code>
           </p>
         )}
-        <p className="mt-1 text-xs text-slate-500">CSV, Parquet and MetaTrader 4/5 exports can be uploaded through <code>POST /api/v1/data/upload</code>.</p>
       </Section>
+
+      <UploadSection onDone={(msg) => { setNotice(msg); refresh(); }} onError={setError} />
 
       <Section title="Providers">
         <table className="min-w-full">
@@ -230,5 +231,76 @@ export default function DataHealthPage() {
         </Section>
       </div>
     </div>
+  );
+}
+
+function UploadSection({ onDone, onError }: { onDone: (msg: string) => void; onError: (e: string | null) => void }) {
+  const [file, setFile] = useState<File | null>(null);
+  const [f, setF] = useState({ symbol: "", asset_class: "fx", frequency: "1d", format: "auto", source_timezone: "UTC" });
+  const [busy, setBusy] = useState(false);
+  const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF((x) => ({ ...x, [k]: e.target.value }));
+
+  const upload = async () => {
+    if (!file || !f.symbol.trim()) {
+      onError("Choose a file and enter the symbol.");
+      return;
+    }
+    onError(null);
+    setBusy(true);
+    const form = new FormData();
+    form.append("file", file);
+    Object.entries({ ...f, symbol: f.symbol.trim() }).forEach(([k, v]) => form.append(k, v));
+    try {
+      const r = await api.upload(form);
+      const d = r.ingested[0];
+      onDone(`Loaded ${d.symbol}: ${d.rows} bars, quality ${d.quality_status}. Run the anomaly tests from Tests.`);
+    } catch (e) {
+      onError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Section title="Load a file (CSV, Parquet, MetaTrader 4/5 export)">
+      <div className="flex flex-wrap items-end gap-3 text-xs text-slate-500">
+        <label className="flex flex-col gap-1">
+          File
+          <input aria-label="Data file" type="file" accept=".csv,.txt,.parquet,.pq" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+        </label>
+        <label className="flex flex-col gap-1">
+          Symbol
+          <input aria-label="Upload symbol" className="input w-32" value={f.symbol} onChange={set("symbol")} placeholder="EURUSD" />
+        </label>
+        <label className="flex flex-col gap-1">
+          Asset class
+          <select className="input" value={f.asset_class} onChange={set("asset_class")}>
+            {ASSET_CLASSES.map((a) => <option key={a}>{a}</option>)}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1">
+          Bar
+          <select aria-label="Upload bar" className="input" value={f.frequency} onChange={set("frequency")}>
+            {["1m", "5m", "15m", "30m", "1h", "4h", "1d", "1wk"].map((x) => <option key={x}>{x}</option>)}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1">
+          Format
+          <select className="input" value={f.format} onChange={set("format")}>
+            {["auto", "csv", "parquet", "mt4", "mt5"].map((x) => <option key={x}>{x}</option>)}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1">
+          Timestamps are in
+          <input className="input w-36" value={f.source_timezone} onChange={set("source_timezone")} title="IANA zone, e.g. UTC or Etc/GMT-2 for a UTC+2 broker server" />
+        </label>
+        <button className="btn" disabled={busy} onClick={upload}>{busy ? "Loading…" : "Load file"}</button>
+      </div>
+      <p className="mt-2 text-xs text-slate-500">
+        Needs date/time, open, high, low, close (volume optional). The data is validated (duplicates, missing prices,
+        incoherent OHLC, gaps) and stored as a real, non-synthetic dataset. MetaTrader times are broker server time: set
+        the zone (e.g. <code>Etc/GMT-2</code> for UTC+2).
+      </p>
+    </Section>
   );
 }

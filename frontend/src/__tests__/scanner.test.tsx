@@ -34,6 +34,11 @@ const anomaly = {
   asset_class: "other",
   market: "",
   provider_id: "synthetic",
+  summary: {
+    method: "Robust z-score", observed_label: "log return", observed: 0.0123, reference_label: "trailing median",
+    reference: 0.0002, reference_scale: 0.0014, deviation: 8.4, deviation_unit: "robust σ",
+    relative: null, relative_label: null,
+  },
 };
 
 function mockFetch() {
@@ -63,6 +68,11 @@ describe("Market Scanner", () => {
     expect(screen.getByText("SYNTHETIC")).toBeInTheDocument();
     expect(screen.getByLabelText("statistical score 0.63")).toBeInTheDocument();
     expect(screen.getAllByText("n/a").length).toBeGreaterThan(0); // economic score not available
+    // Observed value, statistical reference, deviation and method are shown per anomaly.
+    expect(screen.getByText("return_shock")).toBeInTheDocument();
+    expect(screen.getByTitle("log return")).toHaveTextContent(/0\.01/);
+    expect(screen.getByTitle("trailing median")).toBeInTheDocument();
+    expect(screen.getByText("robust σ")).toBeInTheDocument();
   });
 
   it("sends filters to the API", async () => {

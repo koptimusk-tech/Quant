@@ -30,6 +30,21 @@ export interface Anomaly {
   asset_class: string | null;
   market: string | null;
   provider_id: string | null;
+  summary?: AnomalySummary;
+}
+
+/** Observed value, statistical reference, deviation and method (uniform across detectors). */
+export interface AnomalySummary {
+  method: string;
+  observed_label: string | null;
+  observed: number | null;
+  reference_label: string | null;
+  reference: number | null;
+  reference_scale: number | null;
+  deviation: number;
+  deviation_unit: string;
+  relative: number | null;
+  relative_label: string | null;
 }
 
 export interface AnomalyPage {
@@ -183,7 +198,10 @@ const BASE = "/api/v1";
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(BASE + path, {
     ...init,
-    headers: init?.body ? { "Content-Type": "application/json", ...(init?.headers ?? {}) } : init?.headers,
+    headers:
+      init?.body && !(init.body instanceof FormData)
+        ? { "Content-Type": "application/json", ...(init?.headers ?? {}) }
+        : init?.headers,
   });
   if (!res.ok) {
     let detail = res.statusText;
@@ -224,6 +242,12 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ items, run_async: runAsync }),
     }),
+  /** Upload a CSV/Parquet/MT4/MT5 export; it is validated, normalised and stored as a dataset. */
+  upload: (form: FormData) =>
+    request<{ ingested: { symbol: string; dataset_id: string; quality_status: string; rows: number }[] }>(
+      "/data/upload",
+      { method: "POST", body: form },
+    ),
   scan: (body: Record<string, unknown>) =>
     request<{ job?: Job; experiment?: { id: string } }>("/scans", { method: "POST", body: JSON.stringify(body) }),
   jobs: () => request<Job[]>("/jobs?limit=20"),
