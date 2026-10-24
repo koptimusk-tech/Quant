@@ -1,9 +1,15 @@
 name: Desktop installers
 
 # Builds the desktop app with the Python backend frozen inside (no Python needed on the user's machine).
-# Run it from the Actions tab, or push a tag like v0.3.0 to also publish a GitHub release with the installers.
+# Run it from the Actions tab (optionally with a version such as v0.3.0 to publish a GitHub release), or push a
+# tag like v0.3.0 to publish that release.
 on:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Publish a release with this tag (e.g. v0.3.0). Leave empty to only build."
+        required: false
+        default: ""
   push:
     tags: ["v*"]
 
@@ -74,9 +80,16 @@ jobs:
             desktop/src-tauri/target/release/bundle/**/*.rpm
           if-no-files-found: error
       - name: Attach to the release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.release_tag != ''
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ inputs.release_tag || github.ref_name }}
+          target_commitish: ${{ github.sha }}
+          name: Quant Anomaly Lab ${{ inputs.release_tag || github.ref_name }}
+          body: |
+            Instaladores de escritorio con el motor incluido (no requieren Python).
+            Windows: `-setup.exe` o `.msi` (incluye MetaTrader 5). macOS: `.dmg`. Linux: `.deb`, `.AppImage` o `.rpm`.
+            No están firmados: en Windows pulsa "Más información" y "Ejecutar de todas formas"; en macOS, clic derecho → Abrir.
           files: |
             desktop/src-tauri/target/release/bundle/**/*.msi
             desktop/src-tauri/target/release/bundle/**/*-setup.exe
