@@ -128,3 +128,15 @@ def test_mt5_spread_reader_stays_below_max_bars():
     src = predictive.spread_from_mt5_terminal("EURUSD", "1h", 0, module=FakeMT5(), n_bars=200_000)
     assert asked["n"] == 99_999  # the terminal rejects a request for exactly maxbars bars
     assert abs(src.bps.iloc[0] - 10 * 1e-5 / 1.1 * 1e4) < 1e-9
+
+
+def test_run_with_historical_spread_persists_the_study(env, session, tmp_path):
+    path = _mt5_csv(tmp_path / "eu.csv", 1500, 1, spread_pts=10)
+    _load(session, path, "EURUSD")
+    session.flush()
+    spread = predictive.spread_from_mt5_csv(path, "EURUSD", "1d", 1e-5)
+    cfg = predictive.RunConfig(symbols=("EURUSD",), frequencies=("1d",), horizons=(1, 5), pair=None, spreads=[spread])
+    r = predictive.run(session, ParquetStore(env.data_dir), cfg, tmp_path / "out", log=lambda m: None)
+    assert r["data_audit"][0]["historical_spread"]["used"]
+    ok = [s for s in r["studies"] if s.get("status") == "ok"]
+    assert ok and all("historical_spread" in s["result"]["cost_model"]["scenarios"] for s in ok)

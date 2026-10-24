@@ -168,3 +168,26 @@ def test_real_binance_download():  # pragma: no cover
     df = CCXTAdapter(exchange="binance").fetch(FetchRequest(InstrumentSpec("BTC/USDT", "crypto"), "1d",
                                                             start=datetime.now(UTC) - timedelta(days=30)))
     assert len(df) > 10
+
+
+def test_metatrader5_reads_long_ranges_in_windows_and_stops_where_history_ends():
+    dt = [("time", "i8"), ("open", "f8"), ("high", "f8"), ("low", "f8"), ("close", "f8"), ("tick_volume", "i8"),
+          ("spread", "i4"), ("real_volume", "i8")]
+    calls = []
+
+    def rng(sym, tf, lo, hi):
+        calls.append((lo, hi))
+        if lo < datetime(2021, 1, 1, tzinfo=UTC):  # no history this far back
+            return None
+        hours = pd.date_range(lo, hi, freq="h", inclusive="left")[:3]
+        return np.array([(int(t.timestamp()), 1.1, 1.2, 1.0, 1.15, 5, 1, 0) for t in hours], dtype=dt)
+
+    fake = types.SimpleNamespace(initialize=lambda **k: True, symbol_select=lambda s, b: True, TIMEFRAME_H1=16385,
+                                 copy_rates_range=rng, shutdown=lambda: None, last_error=lambda: (-2, "Invalid params"))
+    ad = MetaTrader5Adapter(module=fake)
+    req = FetchRequest(InstrumentSpec("EURUSD", "fx"), "1h", start=datetime(2019, 1, 1, tzinfo=UTC),
+                       end=datetime(2024, 1, 1, tzinfo=UTC))
+    df = ad.fetch(req)
+    assert len(calls) >= 4 and all((hi - lo).days <= 365 for lo, hi in calls)
+    assert len(df) == 9 and df.index.is_monotonic_increasing
+    assert "no bars before" in ad.last_fetch_note
