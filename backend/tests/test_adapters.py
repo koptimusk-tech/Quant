@@ -185,8 +185,8 @@ def test_metatrader5_reads_long_ranges_in_windows_and_stops_where_history_ends()
     fake = types.SimpleNamespace(initialize=lambda **k: True, symbol_select=lambda s, b: True, TIMEFRAME_H1=16385,
                                  copy_rates_range=rng, shutdown=lambda: None, last_error=lambda: (-2, "Invalid params"))
     ad = MetaTrader5Adapter(module=fake)
-    req = FetchRequest(InstrumentSpec("EURUSD", "fx"), "1h", start=datetime(2019, 1, 1, tzinfo=UTC),
-                       end=datetime(2024, 1, 1, tzinfo=UTC))
+    # Naive dates, as the CLI passes them, are read as UTC.
+    req = FetchRequest(InstrumentSpec("EURUSD", "fx"), "1h", start=datetime(2019, 1, 1), end=datetime(2024, 1, 1))
     df = ad.fetch(req)
     assert len(calls) >= 4 and all((hi - lo).days <= 365 for lo, hi in calls)
     assert len(df) == 9 and df.index.is_monotonic_increasing

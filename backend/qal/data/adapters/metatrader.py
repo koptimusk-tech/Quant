@@ -24,6 +24,10 @@ _TF_NAMES = {
 }
 
 
+def _utc(d: datetime) -> datetime:
+    return d.replace(tzinfo=UTC) if d.tzinfo is None else d
+
+
 class MetaTrader5Adapter(DataAdapter):
     kind = "metatrader5"
     supported_frequencies = tuple(_TF_NAMES)
@@ -101,8 +105,9 @@ class MetaTrader5Adapter(DataAdapter):
         try:
             if not mt5.symbol_select(req.instrument.symbol, True):
                 raise ProviderError(f"MT5 symbol not available: {req.instrument.symbol}")
-            start = req.start or datetime.now(UTC) - timedelta(days=365 * 5)
-            end = req.end or datetime.now(UTC)
+            # Naive dates (e.g. from the CLI) are read as UTC so they compare with the aware defaults.
+            start = _utc(req.start) if req.start else datetime.now(UTC) - timedelta(days=365 * 5)
+            end = _utc(req.end) if req.end else datetime.now(UTC)
             frames = self._fetch_chunks(mt5, req.instrument.symbol, getattr(mt5, _TF_NAMES[req.frequency]),
                                         start, end, req.frequency)
         finally:
