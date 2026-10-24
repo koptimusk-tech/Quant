@@ -68,6 +68,9 @@ npm run build
 cd ..
 ```
 
+Si `npm` muestra un aviso sobre `allow-scripts` y `esbuild`, puedes ignorarlo: la compilación funciona igual.
+En PowerShell 5.1 algunos símbolos (como σ) pueden verse mal en la consola; es solo visual.
+
 **2. Base de datos y configuración.** No hay que configurar nada: por defecto usa SQLite en
 `backend\var\qal.db` y guarda los datos en `backend\var\data`. Para cambiarlo, copia `.env.example` a
 `backend\.env` y edita las variables:
@@ -120,9 +123,22 @@ npx playwright test                              # navegador, de extremo a extre
   2. Elige el símbolo (p. ej. EURUSD), el periodo (H1, D1…) y las fechas, y pulsa *Solicitar* y luego
      *Exportar barras*.
   3. En la app, ve a **Data Health → Load a file** y elige el fichero.
-  4. Escribe el símbolo y el periodo, elige el formato `mt5` e indica la zona horaria del servidor del bróker
-     (p. ej. `Etc/GMT-2` para UTC+2).
+  4. Escribe el símbolo y el periodo, elige el formato `mt5` e indica la zona horaria del servidor del bróker.
+     La mayoría de brókers de MT5 usan UTC+2 en invierno y UTC+3 en verano (horario de Nueva York + 7 h): para
+     ellos usa una zona con cambio de hora, como `Europe/Helsinki` o `Europe/Athens`. `Etc/GMT-2` es UTC+2 fijo,
+     sin horario de verano, y solo vale si tu bróker no cambia de hora.
   5. Pulsa **Load file**.
+
+  Para barras diarias (D1), el bróker ya cierra el día a su medianoche. Si indicas una zona distinta de UTC, la
+  fecha se convierte a UTC y la barra aparece con la hora 22:00 o 21:00 del día anterior. Para D1 suele ser más
+  claro dejar la zona en `UTC`.
+
+  Desde PowerShell 5.1 (`Invoke-RestMethod` no tiene `-Form`), usa `curl.exe`:
+
+  ```powershell
+  curl.exe -F "file=@EURUSD_H1.csv" -F symbol=EURUSD -F asset_class=fx -F frequency=1h `
+           -F format=mt5 -F source_timezone=Europe/Helsinki http://127.0.0.1:8000/api/v1/data/upload
+  ```
 
   También vale cualquier CSV con columnas date/time, open, high, low, close y, opcionalmente, volume.
 - **MetaTrader 5 directo:** con el terminal abierto, ve a **Data Health → Download market data** y elige el
@@ -180,7 +196,7 @@ cd backend
 ../.venv/bin/python -m qal.cli ingest ccxt BTC/USDT crypto --frequency 1h --start 2024-01-01 --exchange binance
 ../.venv/bin/python -m qal.cli ingest stooq spy.us etf
 ../.venv/bin/python -m qal.cli ingest local_file EURUSD fx --frequency 1h \
-    --options '{"path": "EURUSD_H1.csv", "format": "mt5", "source_timezone": "Etc/GMT-2"}'
+    --options '{"path": "EURUSD_H1.csv", "format": "mt5", "source_timezone": "Europe/Helsinki"}'
 ../.venv/bin/python -m qal.cli scan            # escanea los últimos datasets
 ```
 
