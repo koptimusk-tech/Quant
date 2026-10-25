@@ -38,12 +38,16 @@ barras ≤ t y líneas base que terminan en t-1. Los parámetros por defecto se 
   mitad), con enfriamiento de 20 barras.
 - Retraso inherente: un cambio de régimen se detecta tras varias barras de la ventana corta.
 - Se informa el p-valor de la prueba F de cociente de varianzas, válido solo bajo normalidad iid (referencia).
+- p empírico: rango de `|log2|` entre los `rank_window` (500) valores previos **finitos** (v1.2.0; antes las barras de
+  calentamiento contaban como ceros y los p de las ~270 barras siguientes salían demasiado pequeños). Las ventanas
+  cortas se solapan, así que valores consecutivos están muy correlacionados: el p no es exacto.
 
 ## pair_divergence (`cross_asset_divergence`)
 - OLS rodante de `log TRI_Y` sobre `log TRI_X` en 120 barras que terminan en t-1; residuo en t fuera de muestra
   dividido por la desviación típica de los residuos de la ventana. Inicio de `|z| ≥ 4`, enfriamiento 20 barras.
 - Disponibilidad del par = máximo de las disponibilidades de ambas patas.
 - En cada evento: p-valor Engle-Granger en la ventana, correlación de retornos en la ventana y reciente.
+- p empírico: rango de `|z|` entre los 250 valores previos finitos (v1.2.0, misma corrección que la volatilidad).
 - Una correlación alta no implica spread estacionario; si Engle-Granger no apoya cointegración se añade como
   explicación alternativa.
 
@@ -65,12 +69,16 @@ Los valores guardados en cada escaneo no cambian; las explicaciones, la priorida
 Significación (indicador visual): fuerte < 0,01, significativa < 0,05, débil < 0,10, no significativa el resto.
 Un ADJ. P cercano a 1 es ausencia de evidencia, no una señal fuerte.
 
-**ECON. SCORE no es interpretable en todos los detectores.** El "movimiento" es el retorno absoluto de la barra en
-`return_shock` y `volume_anomaly`, pero en `volatility_regime` es la volatilidad por barra de la ventana corta (un
-nivel, no un movimiento del evento) y en `pair_divergence` el spread en log. Con un coste FX de 3 pb casi cualquier
-cambio de volatilidad saca 0,8 o más, incluso si la volatilidad baja. La API lo marca con `interpretable: false` y la
-prioridad lo cuenta a la mitad. Faltan, para validar relevancia económica: retornos posteriores, spread y slippage
-reales en el momento del evento, capacidad y confirmación fuera de muestra.
+**ECON. SCORE solo existe cuando la variable detectada es un movimiento de precio** (método `move_vs_cost@2`,
+desde la auditoría de la Fase 9). Se calcula para `return_shock` (el retorno de la barra es lo detectado) y para
+`pair_divergence` (spread en log, que depende del nivel de la regresión: `interpretable: false` y la prioridad lo
+cuenta a la mitad). **No se calcula** para `volatility_regime` (su magnitud es un nivel de volatilidad, no un retorno
+negociable), `volume_anomaly` (lo detectado es volumen; el retorno de la barra es otra variable) ni para
+`isolation_forest`/`local_outlier_factor` (una combinación inusual de variables): `economic_score` queda nulo con el
+motivo en `economic_context.reason`, y su relevancia económica solo puede venir del estudio de eventos de los retornos
+posteriores. Los escaneos anteriores conservan su valor guardado (no se reescriben resultados históricos), pero la
+prioridad ya no lo cuenta. Faltan, para validar relevancia económica: retornos posteriores, spread y slippage reales
+en el momento del evento, capacidad y confirmación fuera de muestra.
 
 ### Prioridad de investigación (`qal/anomaly/priority.py`)
 
@@ -83,7 +91,7 @@ prioridad = base × Q × D × A   (tope 0,49 sin ADJ. P < 0,05 ni apoyo fuera de
 |---|---|
 | E evidencia | min(1, −log10(ADJ. P) / 3); 0 con p = 1 o nulo |
 | P predictiva | estudio de eventos: apoyado OOS 1; solo en muestra 0,4; sin evaluar 0,2; muestra insuficiente 0,1; sin evidencia 0 |
-| C económica | ECON. SCORE, a la mitad si no es interpretable para el detector |
+| C económica | ECON. SCORE; a la mitad en pares; 0 en volatilidad, volumen y modelos multivariantes |
 | R rareza | (STAT. SCORE − 0,5) / 0,5 |
 | Q datos | pass 1, warn/desconocido 0,8, fail 0; ×0,5 si son sintéticos |
 | D duplicidad | 0,6 si hay un evento más fuerte del mismo detector y dataset a ≤ 10 barras en el mismo escaneo |

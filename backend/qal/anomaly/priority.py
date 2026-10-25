@@ -6,7 +6,7 @@
 
 E evidence      min(1, -log10(adjusted p) / 3); 0 when adjusted p = 1 or missing.
 P predictive    from the latest event study of the anomaly type on the dataset (see PREDICTIVE_VALUE).
-C economic      ECON. SCORE, halved for detectors where it is not interpretable (volatility, pairs).
+C economic      ECON. SCORE, halved where it is not interpretable (pairs); 0 for volatility and volume events.
 R rarity        (STAT. SCORE - 0.5) / 0.5: how far past the detection threshold.
 Q data quality  pass 1, warn/unknown 0.8, fail 0; x 0.5 for synthetic data.
 D duplication   0.6 when a stronger event of the same detector and dataset lies within DUPLICATE_BARS bars
@@ -29,6 +29,7 @@ import numpy as np
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from qal.anomaly.engine import NO_PRICE_MAGNITUDE
 from qal.anomaly.event_study import latest_verdicts
 from qal.anomaly.explain import MOVE_DEFINITIONS
 from qal.models import AnomalyDetection, Dataset, Hypothesis
@@ -72,7 +73,9 @@ def rarity_component(stat_score: float | None) -> float:
 
 
 def economic_component(detector: str, econ: float | None) -> tuple[float, bool]:
-    if econ is None or not math.isfinite(econ):
+    # Volatility and volume events have no tradable price magnitude: a stored score from an older scan
+    # does not count towards priority (qal.anomaly.engine.NO_PRICE_MAGNITUDE).
+    if econ is None or not math.isfinite(econ) or detector in NO_PRICE_MAGNITUDE:
         return 0.0, False
     interpretable = MOVE_DEFINITIONS.get(detector, {"interpretable": True})["interpretable"]
     return (float(econ) if interpretable else float(econ) * 0.5), bool(interpretable)
@@ -100,7 +103,8 @@ def score(*, detector: str, adjusted_p: float | None, stat_score: float | None, 
          "source": f"event study: {PREDICTIVE_LABEL.get(verdict, verdict)}"},
         {"name": "economic", "value": round(c, 4), "weight": w["economic"], "contribution": round(w["economic"] * c, 4),
          "source": f"ECON. SCORE {f'{econ:.2f}' if econ is not None else 'n/a'}"
-                   + ("" if interpretable or econ is None else ", halved: not interpretable for this detector")},
+                   + ("" if interpretable or econ is None else ", not counted: no price magnitude for this detector"
+                      if detector in NO_PRICE_MAGNITUDE else ", halved: not interpretable for this detector")},
         {"name": "rarity", "value": round(r, 4), "weight": w["rarity"], "contribution": round(w["rarity"] * r, 4),
          "source": f"STAT. SCORE {stat_score:.2f}" if stat_score is not None else "n/a"},
     ]

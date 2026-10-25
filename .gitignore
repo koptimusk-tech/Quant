@@ -15,3 +15,4 @@ desktop/node_modules/
 desktop/src-tauri/target/
 desktop/src-tauri/gen/
 desktop/sidecar/
+e2e_runs/

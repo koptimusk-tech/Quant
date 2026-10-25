@@ -69,6 +69,10 @@ degradación y alertas. Pantallas Portfolio & Risk y Paper Trading.
 Estado: portfolio y risk manager implementados; paper trading simulado implementado (docs/PAPER_TRADING.md).
 Pendiente: monitorización continua de degradación y deriva, y los criterios del Gate E.
 
+Auditoría de la Fase 9 (docs/AUDIT_PHASE9.md): cadena end-to-end ejecutable (`qal.cli e2e-audit`), 7 defectos
+corregidos con pruebas de regresión, matriz de preparación. La monitorización, la deriva y los circuit breakers
+(Fase 8) siguen sin implementar.
+
 ## Fase 7 — DRL y ejecución real opcional
 Interfaz experimental DRL/LLM-RL fuera del camino crítico. Adaptadores de ejecución en un servicio separado,
 deshabilitados por defecto, con autorización explícita (Gate F), límites independientes y pruebas de seguridad.

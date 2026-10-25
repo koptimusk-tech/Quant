@@ -25,14 +25,17 @@ SIGNIFICANCE_LEVELS = [  # (upper bound on adjusted p, level, label)
 # What ``move_bps`` is for each detector, and whether comparing it with a round-trip cost is meaningful.
 MOVE_DEFINITIONS: dict[str, dict[str, Any]] = {
     "return_shock": {"label": "Absolute log return of the event bar", "interpretable": True},
-    "volume_anomaly": {"label": "Absolute log return of the bar with unusual volume", "interpretable": True,
-                       "caveat": "The price move is not what was detected (volume was)."},
+    "volume_anomaly": {"label": "Absolute log return of the bar with unusual volume", "interpretable": False,
+                       "caveat": "The price move is not what was detected (volume was). Scans since economic method "
+                                 "move_vs_cost@2 give volume anomalies no economic score; an older stored score "
+                                 "is shown for the record only."},
     "volatility_regime": {
         "label": "Realised volatility per bar over the short window (a level, not a move caused by the event)",
         "interpretable": False,
         "caveat": "Any liquid instrument moves several times its cost per bar, so this score is high for "
                   "almost every volatility event, including volatility drops. It says nothing about whether "
-                  "the regime change can be traded."},
+                  "the regime change can be traded. Scans since economic method move_vs_cost@2 give volatility "
+                  "events no economic score; an older stored score is shown for the record only."},
     "pair_divergence": {
         "label": "Absolute spread (log Y minus the fitted log X), which depends on the regression level",
         "interpretable": False,

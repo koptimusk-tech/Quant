@@ -120,6 +120,15 @@ def evaluate(*, instrument: str, current_units: float, delta_units: float, price
                    G.max_instrument_gross * eq / price_acct, "position above the per-instrument limit")
         else:
             chk("max_instrument_gross", round(inst_expo, 6), G.max_instrument_gross, True, "within limit")
+        # Per market (asset class), as in the portfolio backtest (risk_manager._lookthrough).
+        ac = ctx.asset_class.get(instrument, "other")
+        market_others = sum(abs(v) for k, v in others.items() if ctx.asset_class.get(k, "other") == ac)
+        market = (market_others + abs(new_units * price_acct)) / eq
+        if market > G.max_market_gross + 1e-9:
+            cap_to(f"max_market_gross:{ac}", market, G.max_market_gross,
+                   (G.max_market_gross * eq - market_others) / price_acct, f"gross exposure to market {ac} above the limit")
+        else:
+            chk(f"max_market_gross:{ac}", round(market, 6), G.max_market_gross, True, "within limit")
         gross_others = sum(abs(v) for v in others.values())
         gross = (gross_others + abs(new_units * price_acct)) / eq
         if gross > P.max_gross_exposure + 1e-9:

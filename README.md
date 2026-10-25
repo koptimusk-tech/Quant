@@ -132,6 +132,14 @@ $env:QAL_WEB_URL = "http://127.0.0.1:8000"       # con la API del paso 4 en marc
 npx playwright test                              # navegador, de extremo a extremo
 ```
 
+Recorrido completo de la cadena (datos → calidad → anomalía → hipótesis → validación → cartera → riesgo → paper →
+alerta), con informe JSON por etapa (ver `docs/AUDIT_PHASE9.md`):
+
+```powershell
+cd C:\Apps\Quant\backend
+..\.venv\Scripts\python -m qal.cli e2e-audit --out e2e_runs
+```
+
 **6. Cargar datos reales**
 - **Fichero CSV o export de MetaTrader:**
   1. En MT5, abre *Ver → Símbolos → Barras*.

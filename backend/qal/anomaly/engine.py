@@ -34,6 +34,26 @@ DEFAULT_COST_BPS: dict[str, float | None] = {
 }
 DEFAULT_MIN_DOLLAR_VOLUME = 1_000_000.0
 
+# Version of the preliminary economic score. 2: detectors whose statistic is not a price move get no score.
+ECONOMIC_METHOD = "move_vs_cost@2"
+
+# Detectors whose detected variable has no tradable price magnitude. Scoring them with move_bps / cost would
+# compare an incompatible variable with a cost (a volatility level, or the price return of a bar that was
+# flagged for its volume). Their economic relevance can only come from the event study of later returns.
+NO_PRICE_MAGNITUDE: dict[str, str] = {
+    "volatility_regime": "A volatility regime change is a change in the scale of returns, not a return that can be "
+                         "traded; its size is not compared with costs. Economic relevance can only come from the "
+                         "event study of the returns that follow.",
+    "volume_anomaly": "The detected variable is volume, which has no price magnitude; the bar's price return is a "
+                      "different variable and is not used as the event's size. Economic relevance can only come "
+                      "from the event study of the returns that follow.",
+    "isolation_forest": "A multivariate outlier is an unusual combination of features, not a price move; the bar's "
+                        "return is not the detected variable. Economic relevance can only come from the event study.",
+    "local_outlier_factor": "A multivariate outlier is an unusual combination of features, not a price move; the "
+                            "bar's return is not the detected variable. Economic relevance can only come from the "
+                            "event study.",
+}
+
 
 @dataclass
 class ScanConfig:
@@ -65,13 +85,16 @@ def economic_context(det: Detection, inst: Instrument, df: pd.DataFrame, cost_bp
                      min_dollar_volume: float, legs: int = 1) -> tuple[float | None, dict[str, Any]]:
     """Preliminary tradability context. Not evidence of alpha; no backtest is involved."""
     cost = cost_bps.get(inst.asset_class, DEFAULT_COST_BPS.get(inst.asset_class))
-    ctx: dict[str, Any] = {"assumed_round_trip_cost_bps": cost, "legs": legs,
+    ctx: dict[str, Any] = {"assumed_round_trip_cost_bps": cost, "legs": legs, "method": ECONOMIC_METHOD,
                            "note": "Preliminary: move size vs a placeholder cost assumption. Not a backtest."}
     prior = df[df["event_ts"] < det.event_ts].tail(20)
     dv = (prior["close"] * prior["volume"]).median() if prior["volume"].notna().any() else np.nan
     ctx["median_dollar_volume_20"] = None if not np.isfinite(dv) else float(dv)
     if cost is None:
         ctx["reason"] = f"Asset class {inst.asset_class!r} is not directly tradable; use an ETF/future proxy."
+        return None, ctx
+    if det.detector in NO_PRICE_MAGNITUDE:
+        ctx["reason"] = NO_PRICE_MAGNITUDE[det.detector]
         return None, ctx
     if det.move_bps is None:
         ctx["reason"] = "No price move associated with the event."

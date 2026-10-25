@@ -122,11 +122,25 @@ def ingest(session: Session, req: IngestRequest, *, adapter: DataAdapter | None 
         availability_delay=adapter.availability_delay(freq_req), is_synthetic=adapter.is_synthetic,
         source_ref=adapter.source_ref(freq_req), received_ts=now,
     )
+    # A bar whose end is after the download time was still forming: its values are not the final ones. It is
+    # dropped (the next ingest brings it complete) instead of being stored as if it were a closed bar.
+    incomplete = 0
+    if not adapter.is_synthetic and len(bars):
+        cutoff = pd.Timestamp(now or datetime.now(UTC))
+        cutoff = cutoff.tz_localize("UTC") if cutoff.tzinfo is None else cutoff
+        open_bar = (bars["event_ts"] > cutoff).to_numpy()
+        incomplete = int(open_bar.sum())
+        if incomplete:
+            bars = bars.loc[~open_bar].reset_index(drop=True)
     merge_info: dict[str, Any] = {}
     if prev_df is not None and len(prev_df):
         bars, merge_info = _merge(prev_df, bars)
 
     report = check_bars(bars, frequency=req.frequency, asset_class=spec.asset_class, normalization=norm, now=now)
+    if incomplete:
+        report.issues.append(QualityIssue("incomplete_bars_dropped", "info",
+                                          f"{incomplete} bar(s) still forming at download time were not stored",
+                                          incomplete))
     if merge_info.get("revised_bars"):
         report.issues.append(QualityIssue("revisions", "warn", "Provider revised previously stored bars",
                                           merge_info["revised_bars"], merge_info))
