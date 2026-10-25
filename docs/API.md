@@ -113,3 +113,16 @@ Solo investigación: ninguna ruta cambia hipótesis, paper trading ni políticas
 | GET | `/lab/ranking?include_synthetic=` · `/lab/ranking/export.csv` | Clasificación con Benjamini-Hochberg en todo el laboratorio. |
 | POST · GET | `/lab/selections` | Registrar la clasificación actual (no aprueba ni asigna). |
 | POST | `/lab/portfolio` | `{experiment_ids}`: contribución a cartera. |
+
+## Robustness Lab
+
+Solo investigación: nada aquí envía órdenes ni cambia resultados del laboratorio, paper trading o políticas de riesgo.
+Detalle en [ROBUSTNESS_LAB.md](ROBUSTNESS_LAB.md).
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/robustness/meta` | Estados, dimensiones, criterios, reglas, escenarios y valores por defecto. |
+| GET | `/robustness/candidates` | Candidatos del laboratorio con decisión, p ajustado, carácter exploratorio y último estado. |
+| POST | `/robustness/runs` | `{experiment_id, target_dataset_ids, max_targets, capital_levels, impact_coefficient, min_capacity, peer_experiment_ids, max_seconds, run_async}`; trabajo `robustness_run`. |
+| GET | `/robustness/runs?experiment_id=&state=` · `/robustness/runs/{id}` | Runs y resultados completos. |
+| GET | `/robustness/runs/{id}/export.json` · `/robustness/runs/{id}/matrix.csv` | Exportaciones. |

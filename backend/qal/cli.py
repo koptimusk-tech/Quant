@@ -219,6 +219,35 @@ def cmd_lab_run(args: argparse.Namespace) -> None:
             print(f"written {path}")
 
 
+def cmd_robustness_run(args: argparse.Namespace) -> None:
+    """Robustness Lab: evaluate completed lab experiments (all candidates, or the ones given) and print the state
+    of each dimension. Runs are stored; repeating a run on the same data and configuration returns the stored one."""
+    from qal.robustness import service
+
+    create_all()
+    store = ParquetStore(get_settings().data_dir)
+    with session_scope() as s:
+        cands = service.candidates(s)
+        ids = args.experiment or [c["experiment_id"] for c in cands
+                                  if not (args.real_only and c["is_synthetic"])][: args.limit]
+        out = []
+        for i in ids:
+            e = service.run(s, service.RobustnessConfig(experiment_id=i, max_targets=args.max_targets), store=store,
+                            actor="cli", checkpoint=s.commit)
+            s.commit()
+            r = e.results or {}
+            print(f"{e.id}  {e.status:<9} {r.get('state') or '':<32} {e.config.get('lab_title')}  {e.error or ''}")
+            for k, d in (r.get("dimensions") or {}).items():
+                print(f"      {k:<16} {d['status']:<18} {d['reason']}")
+            out.append({"id": e.id, "status": e.status, **r})
+        if args.out:
+            path = Path(args.out)
+            path.mkdir(parents=True, exist_ok=True)
+            f = path / f"robustness_{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}.json"
+            f.write_text(json.dumps(out, indent=2, default=str))
+            print(f"written {f}")
+
+
 def cmd_worker(args: argparse.Namespace) -> None:
     from qal.jobs.runner import process_once
 
@@ -306,6 +335,14 @@ def main() -> None:
     lr.add_argument("--real-only", action="store_true", help="rank only experiments on real data")
     lr.add_argument("--out", default=None, help="directory for the ranking JSON")
     lr.set_defaults(fn=cmd_lab_run)
+    rr = sub.add_parser("robustness-run", help="Robustness Lab: evaluate completed lab experiments")
+    rr.add_argument("--experiment", action="append", default=[], help="lab experiment id (repeatable); default: "
+                                                                       "the ranked candidates")
+    rr.add_argument("--limit", type=int, default=5, help="number of ranked candidates when no id is given")
+    rr.add_argument("--max-targets", type=int, default=12, help="assets for the cross-asset matrix")
+    rr.add_argument("--real-only", action="store_true", help="only candidates on real data")
+    rr.add_argument("--out", default=None, help="directory for the JSON results")
+    rr.set_defaults(fn=cmd_robustness_run)
     args = p.parse_args()
     args.fn(args)
 

@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,7 +12,19 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from qal import __version__
-from qal.api.routers import alpha, anomalies, data, hypotheses, jobs, lab, model_lab, paper, portfolio, research
+from qal.api.routers import (
+    alpha,
+    anomalies,
+    data,
+    hypotheses,
+    jobs,
+    lab,
+    model_lab,
+    paper,
+    portfolio,
+    research,
+    robustness,
+)
 from qal.api.schemas import AuditOut
 from qal.config import get_settings
 from qal.db import create_all, get_engine, get_session
@@ -97,7 +109,7 @@ def create_app() -> FastAPI:
         return s.scalars(select(AuditEvent).order_by(AuditEvent.created_at.desc()).limit(limit)).all()
 
     for r in (data.router, anomalies.router, research.router, hypotheses.router, jobs.router, alpha.router,
-              model_lab.router, portfolio.router, paper.router, lab.router):
+              model_lab.router, portfolio.router, paper.router, lab.router, robustness.router):
         v1.include_router(r)
     app.include_router(v1)
     if settings.frontend_dist and Path(settings.frontend_dist, "index.html").is_file():

@@ -58,6 +58,11 @@ Estado: **Fases 0, 1 y 2 completadas, con app de escritorio.** Ver [ROADMAP.md](
   recuperación, pipeline común (integridad, baselines, walk-forward con purga y embargo, robustez, estadística con
   corrección de pruebas múltiples en todo el laboratorio), decisiones y clasificación transparentes que no promocionan
   nada, y contribución a cartera. Ver [docs/EXPERIMENT_LAB.md](docs/EXPERIMENT_LAB.md).
+- **Robustness Lab (Fase 11)**: evalúa candidatos del Experiment Lab en otros activos y mercados compatibles (con
+  número efectivo de activos independientes), por ventanas, años y regímenes, con parámetros perturbados, costes y
+  ejecución base/adversa/severa, capacidad aproximada o desconocida, estrés sintético e histórico, controles de
+  riesgo con datos no fiables y contribución a cartera. Estados por dimensión sin compensación; no promociona nada.
+  Ver [docs/ROBUSTNESS_LAB.md](docs/ROBUSTNESS_LAB.md).
 - **App de escritorio** (Tauri) que arranca el motor local y abre la interfaz. Instaladores para Windows, macOS y
   Linux sin necesidad de Python, generados en GitHub Actions. Ver [desktop/README.md](desktop/README.md).
 - **Integración continua** (`.github/workflows/ci.yml`): pruebas del backend en SQLite y PostgreSQL, frontend y
@@ -150,6 +155,12 @@ pipeline de validación y muestra la clasificación (ver `docs/EXPERIMENT_LAB.md
 
 ```powershell
 ..\.venv\Scripts\python -m qal.cli lab-run --generate --limit 20 --out lab_runs
+```
+
+Robustness Lab sobre los candidatos ya ejecutados (ver `docs/ROBUSTNESS_LAB.md`):
+
+```powershell
+..\.venv\Scripts\python -m qal.cli robustness-run --limit 5 --out robustness_runs
 ```
 
 **6. Cargar datos reales**
@@ -289,6 +300,7 @@ Metodología: [docs/RESEARCH.md](docs/RESEARCH.md).
 - [docs/PORTFOLIO.md](docs/PORTFOLIO.md): construcción de portfolios, risk manager, sizing y estrés.
 - [docs/PAPER_TRADING.md](docs/PAPER_TRADING.md): simulación de órdenes, ejecución, riesgo pre-trade y evaluación.
 - [docs/EXPERIMENT_LAB.md](docs/EXPERIMENT_LAB.md): contrato de experimentos, pipeline de validación, selección y ejemplo.
+- [docs/ROBUSTNESS_LAB.md](docs/ROBUSTNESS_LAB.md): matriz por activo y mercado, sensibilidad, costes, capacidad, estrés y estados.
 - [desktop/README.md](desktop/README.md): app de escritorio.
 - [docs/DETECTORS.md](docs/DETECTORS.md): estadísticos, supuestos y limitaciones de cada detector.
 - [docs/DATA_PROVIDERS.md](docs/DATA_PROVIDERS.md): evaluación de proveedores.

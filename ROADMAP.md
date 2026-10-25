@@ -80,6 +80,14 @@ clasificación versionadas sin promoción automática, contribución a cartera y
 Pendiente: generación avanzada (combinaciones de señales validadas, LLM como proponente), CPCV, un único registro de
 ensayos para Research Lab, Alpha Research y Experiment Lab, y repetir el ejemplo con datos reales.
 
+## Fase 11 — Robustez entre mercados, generalización y capacidad
+Estado: implementado (docs/ROBUSTNESS_LAB.md). Matriz por activo y mercado con re-selección y transferencia,
+número efectivo de activos, ventanas/años/regímenes causales, sensibilidad local de parámetros, escenarios de
+costes y ejecución, capacidad aproximada o desconocida, estrés sintético e histórico, controles de riesgo con datos
+no fiables, contribución a cartera, estados por dimensión y pantalla Robustness Lab.
+Pendiente: capacidad observada (requiere spread y profundidad), evaluación entre activos para pares y carteras,
+órdenes limitadas en el backtest y candidatos reales con evidencia estadística suficiente.
+
 ## Fase 7 — DRL y ejecución real opcional
 Interfaz experimental DRL/LLM-RL fuera del camino crítico. Adaptadores de ejecución en un servicio separado,
 deshabilitados por defecto, con autorización explícita (Gate F), límites independientes y pruebas de seguridad.
