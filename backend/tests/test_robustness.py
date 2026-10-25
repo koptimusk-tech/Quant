@@ -328,7 +328,7 @@ def test_robustness_cannot_place_orders_or_change_paper_trading():
     root = pathlib.Path(engine.__file__).parent
     files = [*root.glob("*.py"), root.parent / "api" / "routers" / "robustness.py"]
     for f in files:
-        tree = ast.parse(f.read_text())
+        tree = ast.parse(f.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             names = [a.name for a in node.names] if isinstance(node, ast.Import) else \
                 [node.module or ""] if isinstance(node, ast.ImportFrom) else []
@@ -360,3 +360,26 @@ def test_historical_episodes_are_distinct_and_windows_carry_their_sample(session
     t = engine.temporal(ctx)
     assert sum(w["bars"] for w in t["windows"]) == len(ctx.wf["oos"])
     assert all(w["sharpe_se"] is not None and w["sharpe_se"] > 0 for w in t["windows"])
+
+
+def test_stress_scenarios_keep_the_dividend_adjustment(syn):
+    """A frozen or rebuilt bar must not lose adj_close / close: on an asset with large distributions that created
+    fake jumps (a -99% drawdown under stale_data on TLT)."""
+    f = syn["SYN-A"].copy()
+    factor = np.linspace(0.6, 1.0, len(f))  # distributions paid over the period, as on a bond ETF
+    f["adj_close"] = f["close"] * factor
+    idx = np.arange(300, 900)
+    for name, (_, frames) in engine.stress_frames([f], idx).items():
+        if frames is None:
+            continue
+        g = frames[0]
+        got = (g["adj_close"] / g["close"]).to_numpy()
+        frozen = (g["volume"] == 0) & (f["volume"] != 0) if name == "stale_data" else np.zeros(len(f), bool)
+        expected = np.where(frozen, np.roll(factor, 1), factor)
+        assert np.allclose(got, expected), name
+    stale = engine.stress_frames([f], idx)["stale_data"][1][0]
+    r = np.diff(np.log(stale["adj_close"].to_numpy(float)))
+    base = np.diff(np.log(f["adj_close"].to_numpy(float)))
+    assert np.abs(r).max() <= np.abs(base).max() * 2 + 1e-9  # no artificial jump
+    vol2 = engine.stress_frames([f], idx)["volatility_x2"][1][0]
+    assert np.allclose(np.diff(np.log(vol2["adj_close"].to_numpy(float))), 2 * base)

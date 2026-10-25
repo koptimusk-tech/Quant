@@ -87,6 +87,10 @@ Los costes incluyen comisión, medio spread y slippage (fijo y una fracción del
 Una orden que supera el límite de participación sobre el volumen en dólares de la barra anterior se recorta, y cada
 recorte cuenta como `partial_fill_events`. Esto modela tanto los fills parciales como la parte no ejecutada.
 
+Los escenarios combinan más costes con más retraso, así que no son monótonos: un retraso de 1 o 2 barras cambia qué
+operaciones se hacen y, en algunos candidatos reales, el escenario adverso o el severo da más media neta que el base.
+La dimensión `costs` exige media neta positiva en el adverso; el severo se informa.
+
 No se modelan y se declara así:
 
 - órdenes limitadas (solo existen en paper trading);
@@ -126,6 +130,10 @@ investigación y mantienen los parámetros seleccionados:
 - `correlation_spike`: solo con varios activos;
 - `cost_spike_x5`: costes ×5.
 
+Todos los escenarios conservan el factor de ajuste por dividendos de cada barra (`adj_close / close`); una barra
+congelada conserva el de la barra anterior. `liquidity_drop` solo cambia algo cuando el capital del contrato hace que
+el límite de participación actúe; con capitales pequeños y ETF líquidos da lo mismo que el escenario base.
+
 Los shocks históricos se informan aparte: los drawdowns más profundos y distintos (más de 5 %) de la referencia en el
 periodo evaluado, con el resultado del candidato en cada uno. La pérdida de fuentes reutiliza los subconjuntos del
 universo del laboratorio.
@@ -145,7 +153,9 @@ metodología. Se informan:
 - el solapamiento de días activos;
 - el resultado del candidato durante el máximo drawdown de la referencia.
 
-Una correlación histórica baja no garantiza diversificación en estrés. No se modifica ninguna asignación del paper
+Como la referencia son los demás candidatos, la combinación (referencia + candidato) es la misma cartera para todos
+los candidatos de un mismo conjunto: lo que cambia entre runs es la referencia. Una correlación histórica baja no
+garantiza diversificación en estrés. No se modifica ninguna asignación del paper
 trading.
 
 ## 9. Dimensiones, criterios y estados
@@ -174,7 +184,7 @@ Un run es un `Experiment` de kind `robustness_run`. Su identidad es el hash de:
 - la configuración;
 - la del experimento de laboratorio;
 - el contenido de cada dataset destino;
-- la versión del motor (`robustness@1.0.0`).
+- la versión del motor (`robustness@1.0.1`).
 
 Repetir la misma petición devuelve el run guardado. Cualquier cambio crea uno nuevo junto al anterior, y no se
 sobrescribe nada. Cada run guarda la versión de código y las referencias de datos. El trabajo se puede cancelar entre
@@ -236,6 +246,12 @@ Resultado en una base de datos nueva: 15 runs (unos 15 s), 6 `INSUFFICIENT_DATA`
 Son datos sintéticos: prueban el procedimiento, no los mercados.
 
 Con datos reales, la evaluación se hace con `--real-only` sobre una base de datos con los datos ingeridos.
+
+## Correcciones posteriores
+
+- `robustness@1.0.1`: los escenarios de estrés escribían el cierre sin ajustar en `adj_close` y perdían el ajuste por
+  dividendos. En activos con grandes distribuciones (TLT) eso creaba saltos falsos: `stale_data` llegaba a un drawdown
+  de −99,7 %. Los runs de la versión 1.0.0 se conservan; los nuevos se calculan con la 1.0.1.
 
 ## Limitaciones y siguientes pasos
 
