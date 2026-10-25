@@ -10,6 +10,7 @@ test("use a suggested hypothesis and register it", async ({ page }) => {
   await expect(page.getByText("Pre-filled from a suggested hypothesis")).toBeVisible();
   await expect(page.getByLabel("Title")).toHaveValue("SYNTHETIC SYN-C 1d: time-series momentum");
   await page.getByRole("button", { name: "Register hypothesis" }).click();
-  await expect(page).toHaveURL(/\/research\/[0-9a-f]{8,}/);
+  // Registration waits for the database while other specs run long simulations in parallel.
+  await expect(page).toHaveURL(/\/research\/[0-9a-f]{8,}/, { timeout: 20_000 });
   await expect(page.getByText("HYPOTHESIS_FORMULATED").first()).toBeVisible();
 });

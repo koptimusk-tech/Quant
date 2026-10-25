@@ -105,7 +105,7 @@ posiciones abiertas se valoran al último cierre: **P&L no realizado**, que nunc
 En orden fijo, con los límites de la política activa del HRM: kill switch, estado del sistema (sesión en marcha y
 reconciliada), estado de validación (se vuelve a comprobar en cada orden: una hipótesis suspendida deja de operar),
 calidad y frescura de los datos, cortos en cripto spot, drawdown y pérdida diaria (solo se aceptan órdenes que
-reducen riesgo), exposición por instrumento, bruta, neta y por divisa, apalancamiento, liquidez (participación en el
+reducen riesgo), exposición por instrumento, por mercado (clase de activo, como en el backtest de cartera), bruta, neta y por divisa, apalancamiento, liquidez (participación en el
 valor negociado de la barra anterior), margen libre y lote mínimo. Los límites de exposición **reducen** la orden a lo
 permitido (registrado como bloqueo con la acción); el resto la **rechazan** con el motivo. Reducir una posición
 siempre se permite salvo con kill switch. Las asignaciones por estrategia se limitan a `strategy.max_weight` al crear

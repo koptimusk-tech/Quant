@@ -26,6 +26,15 @@ def _bar(df: pd.DataFrame) -> pd.Timedelta:
     return pd.Timedelta(bar_delta(str(df["frequency"].iloc[0])))
 
 
+def _rank_finite(v: np.ndarray, window: int) -> np.ndarray:
+    """Trailing rank p-value over the finite values only. Warm-up NaNs are not part of the reference: counted as
+    zeros they would make the first ``window`` p-values after the warm-up too small (fixed in version 1.2.0)."""
+    out = np.full(len(v), np.nan)
+    idx = np.flatnonzero(np.isfinite(v))
+    out[idx] = trailing_rank_pvalue(v[idx], window)
+    return out
+
+
 class ReturnShockDetector(Detector):
     name = "return_shock"
     version = "1.1.0"
@@ -128,7 +137,7 @@ class VolumeAnomalyDetector(Detector):
 
 class VolatilityRegimeDetector(Detector):
     name = "volatility_regime"
-    version = "1.1.0"
+    version = "1.2.0"
     anomaly_type = "volatility_shift"
     description = (
         "Ratio of short-window realised volatility (ending at t) to a long baseline that ends before the "
@@ -149,8 +158,7 @@ class VolatilityRegimeDetector(Detector):
         short = s.rolling(ws).std()
         long = s.rolling(wl).std().shift(ws)  # baseline ends just before the short window starts
         lr = np.log2((short / long).to_numpy())
-        rank_p = trailing_rank_pvalue(np.nan_to_num(lr, nan=0.0), int(self.params["rank_window"]))
-        rank_p[~np.isfinite(lr)] = np.nan
+        rank_p = _rank_finite(lr, int(self.params["rank_window"]))
         # Variance-ratio F test p-value: valid only for iid normal returns, reported for reference.
         f = (short / long).to_numpy() ** 2
         f_p = 2 * np.minimum(stats.f.sf(f, ws - 1, wl - 1), stats.f.cdf(f, ws - 1, wl - 1))
@@ -190,7 +198,7 @@ class VolatilityRegimeDetector(Detector):
 
 class PairDivergenceDetector(Detector):
     name = "pair_divergence"
-    version = "1.1.0"
+    version = "1.2.0"
     anomaly_type = "cross_asset_divergence"
     pairwise = True
     description = (
@@ -224,8 +232,7 @@ class PairDivergenceDetector(Detector):
         resid_sd = np.sqrt((vy - beta**2 * vx).clip(lower=0))
         spread = y - alpha - beta * x
         z = (spread / resid_sd.replace(0, np.nan)).to_numpy()
-        rank_p = trailing_rank_pvalue(np.nan_to_num(z), int(self.params["rank_window"]))
-        rank_p[~np.isfinite(z)] = np.nan
+        rank_p = _rank_finite(z, int(self.params["rank_window"]))
         ry, rx = y.diff(), x.diff()
         corr_long = ry.rolling(w).corr(rx).shift(1)
         cs = int(self.params["corr_short_window"])

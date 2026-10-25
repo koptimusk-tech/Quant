@@ -165,6 +165,26 @@ def cmd_model_lab(args: argparse.Namespace) -> None:
                           "budget_exhausted": exp.results.get("budget_exhausted", False)}))
 
 
+def cmd_e2e_audit(args: argparse.Namespace) -> None:
+    from qal import e2e
+
+    create_all()
+    cfg = e2e.E2EConfig()
+    if args.adapter != "synthetic":
+        cfg = e2e.E2EConfig(adapter=args.adapter, symbols=tuple(args.symbols.split(",")), asset_class=args.asset_class,
+                            options=json.loads(args.options) if args.options else {})
+    with session_scope() as s:
+        report = e2e.run(s, cfg)
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    path = out / f"e2e_{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}.json"
+    path.write_text(json.dumps(report, indent=2, default=str))
+    for st in report["stages"]:
+        print(f"{st['stage']:<12} {st['status']:<16} {st['seconds']:>7}s  {st.get('error') or ''}")
+    print(f"validated path stops at: {report['validated_path_stops_at']}")
+    print(f"written {path}")
+
+
 def cmd_worker(args: argparse.Namespace) -> None:
     from qal.jobs.runner import process_once
 
@@ -237,6 +257,13 @@ def main() -> None:
     ml.add_argument("--force", action="store_true", help="recompute even if an identical comparison is stored")
     ml.add_argument("--out", default=None)
     ml.set_defaults(fn=cmd_model_lab)
+    e2 = sub.add_parser("e2e-audit", help="end-to-end run of every stage, data to alert (paper only)")
+    e2.add_argument("--adapter", default="synthetic", help="synthetic (default) or a real adapter, e.g. yahoo")
+    e2.add_argument("--symbols", default="SPY,QQQ,GLD,TLT", help="real adapter only: comma-separated symbols")
+    e2.add_argument("--asset-class", default="etf")
+    e2.add_argument("--options", default=None, help="JSON adapter options")
+    e2.add_argument("--out", default="e2e_runs")
+    e2.set_defaults(fn=cmd_e2e_audit)
     args = p.parse_args()
     args.fn(args)
 
