@@ -119,6 +119,7 @@ class Validator:
     def run(self, n_prior_trials: int = 0) -> dict[str, Any]:
         v = self.c.validation
         wf = self.walk_forward()
+        self.last_walk_forward = wf  # reused by callers that need the stitched series (qal.lab.pipeline)
         variants, full, ppy, wins, chosen_idx = wf["variants"], wf["full"], wf["ppy"], wf["wins"], wf["chosen_idx"]
         wrows = []
         for wd, best, scores in zip(wins, chosen_idx, wf["scores"], strict=True):

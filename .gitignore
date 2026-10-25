@@ -16,3 +16,5 @@ desktop/src-tauri/target/
 desktop/src-tauri/gen/
 desktop/sidecar/
 e2e_runs/
+lab_runs/
+lab_demo/

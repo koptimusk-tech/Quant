@@ -166,8 +166,29 @@ def handle_paper_run(session: Session, payload: dict[str, Any], actor: str) -> d
     return out
 
 
+def handle_lab_experiment(session: Session, payload: dict[str, Any], actor: str) -> dict[str, Any]:
+    """payload: {"experiment_id"}. Runs one Experiment Lab experiment; cancellable between units of work.
+
+    Errors inside the pipeline end the experiment FAILED (recorded) rather than retrying the job: the pipeline is
+    deterministic, so a retry would fail the same way. A finished experiment is returned as it is."""
+    from qal.jobs.runner import stop_requested
+    from qal.lab import service
+    from qal.models import Experiment
+
+    exp = session.get(Experiment, payload["experiment_id"])
+    if exp is None or exp.kind != service.KIND:
+        raise ValueError("unknown lab experiment")
+    job_id = payload.get("_job_id")
+    service.run(session, exp, store=ParquetStore(get_settings().data_dir), actor=actor,
+                should_stop=(lambda: stop_requested(job_id)) if job_id else (lambda: False),
+                checkpoint=session.commit)
+    session.commit()
+    return {"experiment_id": exp.id, "status": exp.status, "error": exp.error}
+
+
 HANDLERS = {"ingest": handle_ingest, "scan": handle_scan, "ingest_and_scan": handle_ingest_and_scan,
             "validate": handle_validate, "alpha_cycle": handle_alpha_cycle,
             "model_experiment": handle_model_experiment, "portfolio_run": handle_portfolio_run,
-            "portfolio_proposals": handle_portfolio_proposals, "paper_run": handle_paper_run}
+            "portfolio_proposals": handle_portfolio_proposals, "paper_run": handle_paper_run,
+            "lab_experiment": handle_lab_experiment}
 __all__ = ["HANDLERS", "latest_dataset"]

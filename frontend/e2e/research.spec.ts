@@ -22,7 +22,7 @@ test("investigate an anomaly, register a hypothesis and validate it", async ({ p
   await page.getByLabel("embargo_bars").fill("10");
   await page.getByLabel("Holdout starts (final test, isolated)").fill("2024-01-01");
   await page.getByRole("button", { name: "Register hypothesis" }).click();
-  await expect(page).toHaveURL(/\/research\/[0-9a-f]{8,}/);
+  await expect(page).toHaveURL(/\/research\/[0-9a-f]{8,}/, { timeout: 20_000 }); // registration is slow while background jobs hold the SQLite write lock
   await expect(page.getByText("HYPOTHESIS_FORMULATED").first()).toBeVisible();
   await page.getByRole("button", { name: "Run validation" }).click();
   await expect(page.getByRole("link", { name: "report" })).toBeVisible({ timeout: 60_000 });

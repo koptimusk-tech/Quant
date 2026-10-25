@@ -155,6 +155,10 @@ class Worker:
             s.execute(update(Job).where(Job.status == "running").values(status="queued"))
             s.execute(update(Job).where(Job.status == "cancelling").values(status="cancelled",
                                                                             finished_at=datetime.now(UTC)))
+        with session_scope() as s:
+            from qal.lab.service import enqueue_orphans
+
+            enqueue_orphans(s)  # Experiment Lab runs interrupted by the crash go back to the queue
         self._thread = threading.Thread(target=self._loop, name="qal-worker", daemon=True)
         self._thread.start()
 

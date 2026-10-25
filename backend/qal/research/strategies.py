@@ -107,6 +107,39 @@ class TimeSeriesMomentum(Strategy):
         return pd.DataFrame({0: w.to_numpy()})
 
 
+class MeanReversion(Strategy):
+    """Fade stretched prices: z = (log price - its rolling mean) / rolling std, both ending at t (known at t's
+    close). Enter against the stretch when |z| >= entry_z, exit when |z| <= exit_z or after max_hold bars."""
+
+    name = "mean_reversion"
+    description = ("Single-instrument reversion: short when the log price is entry_z rolling standard deviations above "
+                   "its rolling mean, long when below; exit near the mean (exit_z) or after max_hold bars.")
+    defaults = {"window": 20, "entry_z": 2.0, "exit_z": 0.5, "max_hold": 10, "long_only": False}
+
+    def weights(self, frames: list[pd.DataFrame]) -> pd.DataFrame:
+        df = frames[0]
+        lp = np.log(total_return_index(df))
+        w = int(self.params["window"])
+        z = ((lp - lp.rolling(w).mean()) / lp.rolling(w).std()).to_numpy()
+        entry, exitz, max_hold = float(self.params["entry_z"]), float(self.params["exit_z"]), int(self.params["max_hold"])
+        out = np.zeros(len(df))
+        state, held = 0, 0
+        for i in range(len(df)):
+            zi = z[i]
+            if not np.isfinite(zi):
+                state = 0
+            elif state == 0 and abs(zi) >= entry:
+                state, held = -int(np.sign(zi)), 0
+            elif state != 0 and (abs(zi) <= exitz or held >= max_hold):
+                state = 0
+            if state < 0 and self.params["long_only"]:
+                state = 0
+            if state != 0:
+                held += 1
+            out[i] = state
+        return pd.DataFrame({0: out})
+
+
 class PairMeanReversion(Strategy):
     name = "pair_mean_reversion"
     n_assets = 2
@@ -202,5 +235,6 @@ class BuyAndHold(Strategy):
 
 
 STRATEGIES: dict[str, type[Strategy]] = {
-    s.name: s for s in (EventStrategy, TimeSeriesMomentum, PairMeanReversion, CrossSectionalFactor, BuyAndHold)
+    s.name: s for s in (EventStrategy, TimeSeriesMomentum, MeanReversion, PairMeanReversion, CrossSectionalFactor,
+                        BuyAndHold)
 }
