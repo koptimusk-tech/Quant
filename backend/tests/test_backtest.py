@@ -72,7 +72,7 @@ def test_gross_exposure_is_capped_at_one():
 
 @pytest.mark.parametrize("name,params", [("event", {}), ("ts_momentum", {"lookback": 20}),
                                          ("ts_momentum", {"lookback": 20, "regime": "high_vol"}),
-                                         ("pair_mean_reversion", {}), ("buy_and_hold", {}),
+                                         ("pair_mean_reversion", {}), ("buy_and_hold", {}), ("mean_reversion", {}),
                                          ("cross_sectional_factor", {"lookback": 120, "skip": 5}),
                                          ("cross_sectional_factor", {"factor": "low_vol"})])
 def test_strategies_are_causal(syn, name, params):

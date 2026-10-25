@@ -53,6 +53,11 @@ Estado: **Fases 0, 1 y 2 completadas, con app de escritorio.** Ver [ROADMAP.md](
   separado, divisas y margen, control de riesgo pre-trade con los límites del HRM, kill switch, reconciliación,
   recuperación tras reinicio y evaluación frente al backtest con criterios prefijados. Ninguna evaluación declara
   una estrategia lista para operar. Ver [docs/PAPER_TRADING.md](docs/PAPER_TRADING.md).
+- **Experiment Lab (Fase 10)**: contrato de experimento versionado, generador determinista de hipótesis por familia
+  (momentum, reversión, factores, anomalías, pares, régimen), cola con estados, cancelación, idempotencia y
+  recuperación, pipeline común (integridad, baselines, walk-forward con purga y embargo, robustez, estadística con
+  corrección de pruebas múltiples en todo el laboratorio), decisiones y clasificación transparentes que no promocionan
+  nada, y contribución a cartera. Ver [docs/EXPERIMENT_LAB.md](docs/EXPERIMENT_LAB.md).
 - **App de escritorio** (Tauri) que arranca el motor local y abre la interfaz. Instaladores para Windows, macOS y
   Linux sin necesidad de Python, generados en GitHub Actions. Ver [desktop/README.md](desktop/README.md).
 - **Integración continua** (`.github/workflows/ci.yml`): pruebas del backend en SQLite y PostgreSQL, frontend y
@@ -138,6 +143,13 @@ alerta), con informe JSON por etapa (ver `docs/AUDIT_PHASE9.md`):
 ```powershell
 cd C:\Apps\Quant\backend
 ..\.venv\Scripts\python -m qal.cli e2e-audit --out e2e_runs
+```
+
+Experiment Lab desde la línea de comandos: genera hipótesis con los datos cargados, las pasa todas por el mismo
+pipeline de validación y muestra la clasificación (ver `docs/EXPERIMENT_LAB.md`):
+
+```powershell
+..\.venv\Scripts\python -m qal.cli lab-run --generate --limit 20 --out lab_runs
 ```
 
 **6. Cargar datos reales**
@@ -276,6 +288,7 @@ Metodología: [docs/RESEARCH.md](docs/RESEARCH.md).
 - [docs/RESEARCH.md](docs/RESEARCH.md): contratos, backtesting, validación, gates.
 - [docs/PORTFOLIO.md](docs/PORTFOLIO.md): construcción de portfolios, risk manager, sizing y estrés.
 - [docs/PAPER_TRADING.md](docs/PAPER_TRADING.md): simulación de órdenes, ejecución, riesgo pre-trade y evaluación.
+- [docs/EXPERIMENT_LAB.md](docs/EXPERIMENT_LAB.md): contrato de experimentos, pipeline de validación, selección y ejemplo.
 - [desktop/README.md](desktop/README.md): app de escritorio.
 - [docs/DETECTORS.md](docs/DETECTORS.md): estadísticos, supuestos y limitaciones de cada detector.
 - [docs/DATA_PROVIDERS.md](docs/DATA_PROVIDERS.md): evaluación de proveedores.

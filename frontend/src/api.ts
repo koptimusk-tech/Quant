@@ -1141,3 +1141,168 @@ export const paper = {
   compare: (ids: string[]) => request<Record<string, any>[]>(`/paper/compare?ids=${ids.join(",")}`),
   exportUrl: (id: string, table: string) => `/api/v1${P}/${id}/export?table=${table}`,
 };
+
+// -- Experiment Lab (Phase 10) -----------------------------------------------------------------------
+export interface LabMeta {
+  spec_version: string;
+  pipeline_version: string;
+  selection_version: string;
+  generator_version: string;
+  families: Record<string, { strategies: string[]; label: string }>;
+  baselines: string[];
+  default_baselines: Record<string, string[]>;
+  decisions: string[];
+  weights: Record<string, number>;
+  states: string[];
+  min_oos_bars: number;
+  min_independent_trades: number;
+  not_a_guarantee: string;
+  live_trading_enabled: false;
+}
+
+export interface LabProposal {
+  generator_key: string;
+  family: string;
+  title: string;
+  why: string;
+  variants: number;
+  baselines: string[];
+  is_synthetic: boolean;
+  spec: Record<string, any>;
+}
+
+export interface LabGenerated {
+  version: string;
+  proposed: LabProposal[];
+  skipped: { family: string; title: string; reason: string }[];
+  n_specs: number;
+  n_variants: number;
+  note: string;
+}
+
+export interface LabExperimentSummary {
+  id: string;
+  status: string;
+  title: string;
+  family: string;
+  strategy: string;
+  universe: string[];
+  is_synthetic: boolean;
+  variants: number;
+  generated_by: string;
+  attempts: number;
+  stage: string | null;
+  created_at: string;
+  finished_at: string | null;
+  duration_s: number | null;
+  error: string | null;
+  decision_at_completion: string | null;
+  score_at_completion: number | null;
+  warnings: string[];
+  oos_sharpe_net: number | null;
+  oos_bars: number | null;
+  invalid_checks: string[] | null;
+  spec_hash: string;
+}
+
+export interface LabCondition {
+  condition: string;
+  met: boolean;
+  evaluable: boolean;
+  detail: string;
+}
+
+export interface LabDecision {
+  decision: string;
+  version: string;
+  score: number;
+  components: { name: string; value: number; source: string }[];
+  weights?: Record<string, number>;
+  reasons: string[];
+  warnings: string[];
+  conditions: Record<string, LabCondition[]> | [];
+  breaks_under?: Record<string, unknown>[];
+  note: string;
+  note_on_p?: string;
+}
+
+export interface LabLineage {
+  id: string;
+  created_at: string;
+  status: string;
+  spec_hash: string;
+  code_version: string;
+  algorithm_version: string;
+  decision_at_completion: string | null;
+  changed_from_previous: string[];
+  previous_attempt: string | null;
+  current: boolean;
+}
+
+export interface LabExperiment extends LabExperimentSummary {
+  config: { spec: Record<string, any>; [k: string]: any };
+  data_refs: Record<string, any>[];
+  code_version: string;
+  algorithm_version: string;
+  config_hash: string;
+  seed: number;
+  results: { attempts: number; pipeline?: Record<string, any>; [k: string]: any };
+  job: Job | null;
+  lineage: LabLineage[];
+}
+
+export interface LabRankingRow {
+  rank: number;
+  experiment_id: string;
+  title: string;
+  family: string;
+  strategy: string;
+  universe: string[];
+  is_synthetic: boolean;
+  decision: string;
+  score: number;
+  reasons: string[];
+  warnings: string[];
+  components: { name: string; value: number; source: string }[];
+  adjusted_p: number;
+  raw_p: number | null;
+  oos_sharpe_net: number | null;
+  oos_mean_net: number | null;
+  oos_bars: number | null;
+  n_trades: number | null;
+  dsr: number | null;
+  n_trials: number | null;
+  variants: number;
+  baselines_beaten: string[];
+}
+
+export interface LabRanking {
+  version: string;
+  n_experiments: number;
+  n_trials_total: number;
+  multiple_testing: string;
+  rows: LabRankingRow[];
+  note: string;
+}
+
+export const lab = {
+  meta: () => request<LabMeta>("/lab/meta"),
+  generate: (families: string[] | null, limit = 20) =>
+    request<LabGenerated>("/lab/generate", { method: "POST", body: JSON.stringify({ families, limit }) }),
+  submit: (spec: Record<string, any>, generator_key: string | null = null, run_async = true) =>
+    request<{ experiment: LabExperimentSummary; created: boolean; job: Job | null }>("/lab/experiments", {
+      method: "POST",
+      body: JSON.stringify({ spec, generator_key, run_async }),
+    }),
+  experiments: () => request<LabExperimentSummary[]>("/lab/experiments"),
+  experiment: (id: string) => request<LabExperiment>(`/lab/experiments/${id}`),
+  cancel: (id: string) => request<LabExperimentSummary>(`/lab/experiments/${id}/cancel`, { method: "POST" }),
+  ranking: (includeSynthetic: boolean) => request<LabRanking>(`/lab/ranking?include_synthetic=${includeSynthetic}`),
+  recordSelection: (note: string) =>
+    request<{ id: string; n_experiments: number }>("/lab/selections", { method: "POST", body: JSON.stringify({ note }) }),
+  selections: () => request<{ id: string; created_at: string; recorded_by: string; note: string; version: string }[]>("/lab/selections"),
+  portfolio: (ids: string[]) =>
+    request<Record<string, any>>("/lab/portfolio", { method: "POST", body: JSON.stringify({ experiment_ids: ids }) }),
+  exportJsonUrl: (id: string) => `${BASE}/lab/experiments/${id}/export.json`,
+  rankingCsvUrl: (includeSynthetic: boolean) => `${BASE}/lab/ranking/export.csv?include_synthetic=${includeSynthetic}`,
+};

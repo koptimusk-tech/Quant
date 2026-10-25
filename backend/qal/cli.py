@@ -185,6 +185,40 @@ def cmd_e2e_audit(args: argparse.Namespace) -> None:
     print(f"written {path}")
 
 
+def cmd_lab_run(args: argparse.Namespace) -> None:
+    """Experiment Lab from the command line: run spec files and/or the generator's proposals, then rank."""
+    from qal.lab import generator, service
+    from qal.lab.spec import ExperimentSpec
+
+    create_all()
+    store = ParquetStore(get_settings().data_dir)
+    with session_scope() as s:
+        todo: list[tuple[ExperimentSpec, str | None]] = [
+            (ExperimentSpec.model_validate(json.loads(Path(f).read_text())), None) for f in args.spec]
+        if args.generate:
+            g = generator.generate(s, families=args.families.split(",") if args.families else None, limit=args.limit)
+            print(f"generator proposed {g['n_specs']} specs ({g['n_variants']} variants), skipped {len(g['skipped'])}")
+            todo += [(ExperimentSpec.model_validate(o["spec"]), o["generator_key"]) for o in g["proposed"]]
+        for spec, key in todo:
+            exp, created = service.create(s, spec, actor="cli", generator_key=key)
+            service.run(s, exp, store=store, actor="cli", checkpoint=s.commit)
+            s.commit()
+            d = ((exp.results or {}).get("pipeline") or {}).get("decision_at_completion") or {}
+            print(f"{exp.id}  {exp.status:<10} {d.get('decision') or '':<15} {'' if created else '(existing) '}"
+                  f"{spec.contract.title}  {exp.error or ''}")
+        r = service.ranking(s, include_synthetic=not args.real_only)
+        print(f"\nranking ({r['multiple_testing']})")
+        for row in r["rows"]:
+            print(f"{row['rank']:>3} {row['decision']:<15} score {row['score']:.2f}  adj p {row['adjusted_p']:.3f}  "
+                  f"{row['title']}")
+        if args.out:
+            out = Path(args.out)
+            out.mkdir(parents=True, exist_ok=True)
+            path = out / f"lab_{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}.json"
+            path.write_text(json.dumps(r, indent=2, default=str))
+            print(f"written {path}")
+
+
 def cmd_worker(args: argparse.Namespace) -> None:
     from qal.jobs.runner import process_once
 
@@ -264,6 +298,14 @@ def main() -> None:
     e2.add_argument("--options", default=None, help="JSON adapter options")
     e2.add_argument("--out", default="e2e_runs")
     e2.set_defaults(fn=cmd_e2e_audit)
+    lr = sub.add_parser("lab-run", help="Experiment Lab: run spec files or generated hypotheses and rank them")
+    lr.add_argument("--spec", action="append", default=[], help="path of an experiment spec JSON (repeatable)")
+    lr.add_argument("--generate", action="store_true", help="also run the generator's proposals")
+    lr.add_argument("--families", default=None, help="comma-separated families for the generator")
+    lr.add_argument("--limit", type=int, default=10)
+    lr.add_argument("--real-only", action="store_true", help="rank only experiments on real data")
+    lr.add_argument("--out", default=None, help="directory for the ranking JSON")
+    lr.set_defaults(fn=cmd_lab_run)
     args = p.parse_args()
     args.fn(args)
 

@@ -73,6 +73,13 @@ Auditoría de la Fase 9 (docs/AUDIT_PHASE9.md): cadena end-to-end ejecutable (`q
 corregidos con pruebas de regresión, matriz de preparación. La monitorización, la deriva y los circuit breakers
 (Fase 8) siguen sin implementar.
 
+## Fase 10 — Experimentación autónoma y selección robusta
+Estado: implementado (docs/EXPERIMENT_LAB.md). Contrato de experimento versionado, generador determinista por
+familia, planificador con estados, cancelación, idempotencia y recuperación, pipeline común A–E, decisiones y
+clasificación versionadas sin promoción automática, contribución a cartera y pantalla Experiment Lab.
+Pendiente: generación avanzada (combinaciones de señales validadas, LLM como proponente), CPCV, un único registro de
+ensayos para Research Lab, Alpha Research y Experiment Lab, y repetir el ejemplo con datos reales.
+
 ## Fase 7 — DRL y ejecución real opcional
 Interfaz experimental DRL/LLM-RL fuera del camino crítico. Adaptadores de ejecución en un servicio separado,
 deshabilitados por defecto, con autorización explícita (Gate F), límites independientes y pruebas de seguridad.

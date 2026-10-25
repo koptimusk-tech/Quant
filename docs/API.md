@@ -95,3 +95,21 @@ Ninguna ruta envía órdenes fuera de la aplicación. Las acciones llevan `by` (
 | GET | `/paper/sessions/{id}/export?table=orders\|fills\|equity\|ledger\|events\|signals` | CSV. |
 | POST | `/paper/sessions/{id}/reset` · `/delete` | `{by, confirm: true}`; el registro del experimento se conserva. |
 | GET | `/paper/compare?ids=a,b` | Comparación de sesiones. |
+
+
+## Experiment Lab
+
+Solo investigación: ninguna ruta cambia hipótesis, paper trading ni políticas de riesgo. Detalle en
+[EXPERIMENT_LAB.md](EXPERIMENT_LAB.md).
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/lab/meta` | Familias, baselines, versiones, decisiones, pesos y mínimos de muestra. |
+| POST | `/lab/generate` | `{families, limit}`: propuestas deterministas; no ejecuta ni guarda. |
+| POST | `/lab/experiments` | `{spec, run_async, generator_key}`: crear o importar (trabajo `lab_experiment`); misma spec y datos → el existente. |
+| GET | `/lab/experiments?status=` · `/lab/experiments/{id}` | Cola, progreso por etapa, resultados A–E, decisión y `lineage`. |
+| POST | `/lab/experiments/{id}/cancel` | `QUEUED`/`RUNNING` → cancelado; terminado → 409. |
+| GET | `/lab/experiments/{id}/export.json` | Registro completo. |
+| GET | `/lab/ranking?include_synthetic=` · `/lab/ranking/export.csv` | Clasificación con Benjamini-Hochberg en todo el laboratorio. |
+| POST · GET | `/lab/selections` | Registrar la clasificación actual (no aprueba ni asigna). |
+| POST | `/lab/portfolio` | `{experiment_ids}`: contribución a cartera. |
