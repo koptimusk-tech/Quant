@@ -1306,3 +1306,86 @@ export const lab = {
   exportJsonUrl: (id: string) => `${BASE}/lab/experiments/${id}/export.json`,
   rankingCsvUrl: (includeSynthetic: boolean) => `${BASE}/lab/ranking/export.csv?include_synthetic=${includeSynthetic}`,
 };
+
+// -- Robustness Lab (Phase 11) ---------------------------------------------------------------------
+export type RobustnessState = "NOT_EVALUATED" | "INSUFFICIENT_DATA" | "FRAGILE" | "MIXED_EVIDENCE" | "ROBUST_UNDER_TESTED_ASSUMPTIONS";
+export type DimensionStatus = "PASS" | "FAIL" | "INSUFFICIENT_DATA";
+
+export interface RobustnessMeta {
+  version: string;
+  states: RobustnessState[];
+  dimensions: string[];
+  essential: string[];
+  core_fragility: string[];
+  criteria: Record<string, string>;
+  rules: string;
+  execution_scenarios: Record<string, { cost_multiplier: number; delay_bars: number; participation_factor: number }>;
+  defaults: Record<string, unknown>;
+  not_a_guarantee: string;
+  live_trading_enabled: false;
+}
+
+export interface RobustnessCandidate {
+  experiment_id: string;
+  title: string;
+  family: string;
+  strategy: string;
+  universe: string[];
+  asset_class: string | null;
+  markets: string[];
+  timeframe: string | null;
+  period: [string, string] | null;
+  is_synthetic: boolean;
+  decision: string;
+  adjusted_p: number | null;
+  oos_sharpe_net: number | null;
+  oos_bars: number | null;
+  n_trades: number | null;
+  exploratory: boolean;
+  robustness_run_id: string | null;
+  robustness_state: RobustnessState | null;
+}
+
+export interface RobustnessRunSummary {
+  id: string;
+  status: string;
+  created_at: string;
+  finished_at: string | null;
+  experiment_id: string;
+  title: string;
+  family: string;
+  strategy: string;
+  state: RobustnessState | null;
+  state_reasons: string[];
+  duration_s: number | null;
+  error: string | null;
+  dimensions: Record<string, DimensionStatus>;
+  exploratory: boolean | null;
+  is_synthetic: boolean | null;
+  universe: string[] | null;
+  asset_class: string | null;
+  timeframe: string | null;
+  decision: string | null;
+}
+
+export interface RobustnessRun extends RobustnessRunSummary {
+  config: Record<string, any>;
+  data_refs: Record<string, any>[];
+  code_version: string;
+  algorithm_version: string;
+  config_hash: string;
+  results: Record<string, any>;
+}
+
+export const robustness = {
+  meta: () => request<RobustnessMeta>("/robustness/meta"),
+  candidates: () => request<RobustnessCandidate[]>("/robustness/candidates"),
+  runs: () => request<RobustnessRunSummary[]>("/robustness/runs"),
+  run: (id: string) => request<RobustnessRun>(`/robustness/runs/${id}`),
+  create: (body: Record<string, unknown>) =>
+    request<{ run: RobustnessRunSummary | null; job: Job | null }>("/robustness/runs", { method: "POST", body: JSON.stringify({ run_async: true, ...body }) }),
+  cancelJob: (jobId: string) => request<Job>(`/jobs/${jobId}/cancel`, { method: "POST" }),
+  job: (jobId: string) => request<Job>(`/jobs/${jobId}`),
+  exportJsonUrl: (id: string) => `${BASE}/robustness/runs/${id}/export.json`,
+  matrixCsvUrl: (id: string) => `${BASE}/robustness/runs/${id}/matrix.csv`,
+};

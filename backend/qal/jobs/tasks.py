@@ -186,9 +186,26 @@ def handle_lab_experiment(session: Session, payload: dict[str, Any], actor: str)
     return {"experiment_id": exp.id, "status": exp.status, "error": exp.error}
 
 
+def handle_robustness_run(session: Session, payload: dict[str, Any], actor: str) -> dict[str, Any]:
+    """payload: a ``RobustnessConfig``. Evaluates one completed lab experiment; cancellable between stages.
+
+    Like lab experiments, a failure is recorded on the run (status failed) instead of retrying a deterministic job."""
+    from qal.jobs.runner import stop_requested
+    from qal.robustness import service
+
+    job_id = payload.get("_job_id")
+    cfg = service.RobustnessConfig.model_validate({k: v for k, v in payload.items() if not k.startswith("_")})
+    exp = service.run(session, cfg, store=ParquetStore(get_settings().data_dir), actor=actor,
+                      should_stop=(lambda: stop_requested(job_id)) if job_id else (lambda: False),
+                      checkpoint=session.commit)
+    session.commit()
+    return {"experiment_id": exp.id, "status": exp.status, "state": (exp.results or {}).get("state"),
+            "error": exp.error}
+
+
 HANDLERS = {"ingest": handle_ingest, "scan": handle_scan, "ingest_and_scan": handle_ingest_and_scan,
             "validate": handle_validate, "alpha_cycle": handle_alpha_cycle,
             "model_experiment": handle_model_experiment, "portfolio_run": handle_portfolio_run,
             "portfolio_proposals": handle_portfolio_proposals, "paper_run": handle_paper_run,
-            "lab_experiment": handle_lab_experiment}
+            "lab_experiment": handle_lab_experiment, "robustness_run": handle_robustness_run}
 __all__ = ["HANDLERS", "latest_dataset"]

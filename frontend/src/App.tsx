@@ -12,6 +12,7 @@ import ModelLabPage from "./pages/ModelLab";
 import PortfolioPage from "./pages/Portfolio";
 import PaperTradingPage from "./pages/PaperTrading";
 import ExperimentLabPage from "./pages/ExperimentLab";
+import RobustnessLabPage from "./pages/RobustnessLab";
 
 const link = ({ isActive }: { isActive: boolean }) =>
   `rounded-md px-3 py-1.5 text-sm ${isActive ? "bg-slate-200 font-medium dark:bg-slate-800" : "hover:bg-slate-100 dark:hover:bg-slate-900"}`;
@@ -41,6 +42,9 @@ export default function App() {
             <NavLink to="/lab" className={link}>
               Experiment Lab
             </NavLink>
+            <NavLink to="/robustness" className={link}>
+              Robustness Lab
+            </NavLink>
             <NavLink to="/portfolio" className={link}>
               Portfolio &amp; Risk
             </NavLink>
@@ -67,6 +71,7 @@ export default function App() {
           <Route path="/alpha/:id" element={<AlphaHypothesisPage />} />
           <Route path="/models" element={<ModelLabPage />} />
           <Route path="/lab" element={<ExperimentLabPage />} />
+          <Route path="/robustness" element={<RobustnessLabPage />} />
           <Route path="/portfolio" element={<PortfolioPage />} />
           <Route path="/paper" element={<PaperTradingPage />} />
         </Routes>
