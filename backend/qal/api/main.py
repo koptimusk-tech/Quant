@@ -23,6 +23,7 @@ from qal.api.routers import (
     paper,
     portfolio,
     research,
+    program,
     robustness,
 )
 from qal.api.schemas import AuditOut
@@ -109,7 +110,8 @@ def create_app() -> FastAPI:
         return s.scalars(select(AuditEvent).order_by(AuditEvent.created_at.desc()).limit(limit)).all()
 
     for r in (data.router, anomalies.router, research.router, hypotheses.router, jobs.router, alpha.router,
-              model_lab.router, portfolio.router, paper.router, lab.router, robustness.router):
+              model_lab.router, portfolio.router, paper.router, lab.router, robustness.router,
+              program.router):
         v1.include_router(r)
     app.include_router(v1)
     if settings.frontend_dist and Path(settings.frontend_dist, "index.html").is_file():

@@ -214,6 +214,12 @@ def _strategy_status(s: Session, rt: Runtime, sid: str) -> str:
         return "UNKNOWN"
     if plan.kind == "demo":
         return "DEMO"
+    if plan.kind == "candidate":  # re-checked at every order: an altered record stops trading
+        from qal.models import Experiment
+        from qal.program import registry
+
+        rec = s.get(Experiment, plan.id[2:])
+        return registry.admission_status(rec) if rec is not None else "UNKNOWN"
     h = s.get(Hypothesis, plan.hypothesis_id)
     return h.status if h else "UNKNOWN"
 

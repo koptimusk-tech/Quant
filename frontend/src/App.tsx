@@ -11,6 +11,7 @@ import AlphaHypothesisPage from "./pages/AlphaHypothesis";
 import ModelLabPage from "./pages/ModelLab";
 import PortfolioPage from "./pages/Portfolio";
 import PaperTradingPage from "./pages/PaperTrading";
+import PaperValidationPage from "./pages/PaperValidation";
 import ExperimentLabPage from "./pages/ExperimentLab";
 import RobustnessLabPage from "./pages/RobustnessLab";
 
@@ -51,6 +52,9 @@ export default function App() {
             <NavLink to="/paper" className={link}>
               Paper Trading
             </NavLink>
+            <NavLink to="/validation" className={link}>
+              Paper Validation
+            </NavLink>
             <NavLink to="/data" className={link}>
               Data Health
             </NavLink>
@@ -74,6 +78,7 @@ export default function App() {
           <Route path="/robustness" element={<RobustnessLabPage />} />
           <Route path="/portfolio" element={<PortfolioPage />} />
           <Route path="/paper" element={<PaperTradingPage />} />
+          <Route path="/validation" element={<PaperValidationPage />} />
         </Routes>
       </main>
     </div>

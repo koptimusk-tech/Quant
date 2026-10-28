@@ -143,7 +143,10 @@ def get(s: Session, sid: str) -> PaperSession:
     return ps
 
 
-def start(s: Session, ps: PaperSession, by: str) -> PaperSession:
+def start(s: Session, ps: PaperSession, by: str, *, via_program: bool = False) -> PaperSession:
+    if (ps.config or {}).get("program_id") and not via_program:
+        raise PaperError("this session belongs to a paper validation program: resume it through the program's "
+                         "audited procedure")
     if ps.status not in ("CREATED", "PAUSED"):
         raise PaperError(f"cannot start a session that is {ps.status}")
     if ps.kill_switch:
@@ -217,6 +220,9 @@ def cancel_order(s: Session, ps: PaperSession, order_id: str, by: str) -> PaperO
 
 
 def change_config(s: Session, ps: PaperSession, changes: dict[str, Any], by: str, reason: str) -> PaperSession:
+    if (ps.config or {}).get("program_id"):
+        raise PaperError("this session belongs to a paper validation program: its history is kept and its "
+                         "configuration is fixed by the protocol (stop the program instead)")
     bad = sorted(set(changes) - set(MUTABLE_FIELDS))
     if bad:
         raise PaperError(f"these fields cannot change during a session: {bad} (criteria, strategies, data and "
@@ -241,6 +247,9 @@ _CHILD_TABLES = (PaperEvent, PaperEquity, PaperSignal, PaperLedger, PaperFill, P
 
 
 def reset(s: Session, ps: PaperSession, by: str, confirm: bool) -> PaperSession:
+    if (ps.config or {}).get("program_id"):
+        raise PaperError("this session belongs to a paper validation program: its history is kept and its "
+                         "configuration is fixed by the protocol (stop the program instead)")
     if not confirm:
         raise PaperError("reset must be confirmed explicitly")
     exp = s.get(Experiment, ps.experiment_id)
@@ -261,6 +270,9 @@ def reset(s: Session, ps: PaperSession, by: str, confirm: bool) -> PaperSession:
 
 
 def delete_session(s: Session, ps: PaperSession, by: str, confirm: bool) -> None:
+    if (ps.config or {}).get("program_id"):
+        raise PaperError("this session belongs to a paper validation program: its history is kept and its "
+                         "configuration is fixed by the protocol (stop the program instead)")
     if not confirm:
         raise PaperError("delete must be confirmed explicitly")
     exp = s.get(Experiment, ps.experiment_id)

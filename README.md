@@ -63,6 +63,11 @@ Estado: **Fases 0, 1 y 2 completadas, con app de escritorio.** Ver [ROADMAP.md](
   ejecución base/adversa/severa, capacidad aproximada o desconocida, estrés sintético e histórico, controles de
   riesgo con datos no fiables y contribución a cartera. Estados por dimensión sin compensación; no promociona nada.
   Ver [docs/ROBUSTNESS_LAB.md](docs/ROBUSTNESS_LAB.md).
+- **Programa de validación en paper trading (Fase 12)**: registro inmutable y versionado de candidatas con admisión
+  por una persona, protocolo congelado antes del inicio con horizonte adaptado a cada candidata, modos replay
+  histórico / paper prospectivo / simulación sintética separados y etiquetados, comparación con el backtest de la
+  misma versión en las mismas barras, seguimiento con incertidumbre, causas de pausa con reanudación auditada y
+  clasificación por reglas con revisión documentada. Solo simulación. Ver [docs/PAPER_VALIDATION.md](docs/PAPER_VALIDATION.md).
 - **App de escritorio** (Tauri) que arranca el motor local y abre la interfaz. Instaladores para Windows, macOS y
   Linux sin necesidad de Python, generados en GitHub Actions. Ver [desktop/README.md](desktop/README.md).
 - **Integración continua** (`.github/workflows/ci.yml`): pruebas del backend en SQLite y PostgreSQL, frontend y
@@ -161,6 +166,13 @@ Robustness Lab sobre los candidatos ya ejecutados (ver `docs/ROBUSTNESS_LAB.md`)
 
 ```powershell
 ..\.venv\Scripts\python -m qal.cli robustness-run --limit 5 --out robustness_runs
+```
+
+Programa de validación en paper trading: qué candidatas cumplen los requisitos de admisión (no admite nada; ver
+`docs/PAPER_VALIDATION.md`):
+
+```powershell
+..\.venv\Scripts\python -m qal.cli program-audit --real-only --out program_runs
 ```
 
 **6. Cargar datos reales**
@@ -301,6 +313,7 @@ Metodología: [docs/RESEARCH.md](docs/RESEARCH.md).
 - [docs/PAPER_TRADING.md](docs/PAPER_TRADING.md): simulación de órdenes, ejecución, riesgo pre-trade y evaluación.
 - [docs/EXPERIMENT_LAB.md](docs/EXPERIMENT_LAB.md): contrato de experimentos, pipeline de validación, selección y ejemplo.
 - [docs/ROBUSTNESS_LAB.md](docs/ROBUSTNESS_LAB.md): matriz por activo y mercado, sensibilidad, costes, capacidad, estrés y estados.
+- [docs/PAPER_VALIDATION.md](docs/PAPER_VALIDATION.md): registro de candidatas, protocolo, modos, pausas, criterios y revisión.
 - [desktop/README.md](desktop/README.md): app de escritorio.
 - [docs/DETECTORS.md](docs/DETECTORS.md): estadísticos, supuestos y limitaciones de cada detector.
 - [docs/DATA_PROVIDERS.md](docs/DATA_PROVIDERS.md): evaluación de proveedores.

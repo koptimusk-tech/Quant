@@ -88,6 +88,14 @@ no fiables, contribución a cartera, estados por dimensión y pantalla Robustnes
 Pendiente: capacidad observada (requiere spread y profundidad), evaluación entre activos para pares y carteras,
 órdenes limitadas en el backtest y candidatos reales con evidencia estadística suficiente.
 
+## Fase 12 — Programa de validación en paper trading
+Estado: implementado (docs/PAPER_VALIDATION.md). Registro inmutable y versionado de candidatas, protocolo congelado
+con horizonte adaptado, modos A/B/C etiquetados, comparación con el backtest en las mismas barras, seguimiento con
+incertidumbre, causas de pausa con reanudación auditada, clasificación por reglas con revisión humana y pantalla
+Paper Trading Validation. Ninguna candidata real cumple hoy los requisitos de evidencia.
+Pendiente: carteras de varias candidatas en paper, spreads observados y ejecutar un programa B cuando exista una
+candidata admisible.
+
 ## Fase 7 — DRL y ejecución real opcional
 Interfaz experimental DRL/LLM-RL fuera del camino crítico. Adaptadores de ejecución en un servicio separado,
 deshabilitados por defecto, con autorización explícita (Gate F), límites independientes y pruebas de seguridad.
