@@ -96,6 +96,15 @@ Paper Trading Validation. Ninguna candidata real cumple hoy los requisitos de ev
 Pendiente: carteras de varias candidatas en paper, spreads observados y ejecutar un programa B cuando exista una
 candidata admisible.
 
+## Fase 13 — Revisión de resultados y decisión de preparación
+Estado: implementado (docs/STRATEGY_REVIEW.md). Inventario de evidencia por estrategia y versión, diez controles de
+integridad antes de evaluar, métricas de rendimiento, riesgo y ejecución con tamaño de muestra, incertidumbre con
+dependencia, operaciones independientes y Holm, comparación con compatibilidad, criterios originales y enmiendas
+registradas aparte, motor de decisión determinista y versionado con historial, revisión manual conservadora,
+diagnóstico de causas, informes regenerables y pantalla Strategy Review & Readiness. Con los datos reales no hay
+ninguna sesión de paper trading: el resultado es INSUFFICIENT_EVIDENCE.
+Pendiente: evidencia prospectiva (programa B hasta su horizonte) y costes observados.
+
 ## Fase 7 — DRL y ejecución real opcional
 Interfaz experimental DRL/LLM-RL fuera del camino crítico. Adaptadores de ejecución en un servicio separado,
 deshabilitados por defecto, con autorización explícita (Gate F), límites independientes y pruebas de seguridad.

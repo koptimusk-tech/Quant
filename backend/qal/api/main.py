@@ -24,6 +24,7 @@ from qal.api.routers import (
     portfolio,
     research,
     program,
+    review,
     robustness,
 )
 from qal.api.schemas import AuditOut
@@ -111,7 +112,7 @@ def create_app() -> FastAPI:
 
     for r in (data.router, anomalies.router, research.router, hypotheses.router, jobs.router, alpha.router,
               model_lab.router, portfolio.router, paper.router, lab.router, robustness.router,
-              program.router):
+              program.router, review.router):
         v1.include_router(r)
     app.include_router(v1)
     if settings.frontend_dist and Path(settings.frontend_dist, "index.html").is_file():
