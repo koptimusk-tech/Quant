@@ -71,6 +71,7 @@ def admit(body: dict[str, Any], s: Session = Depends(get_session)) -> dict[str, 
     except (ValidationError, registry.RegistryError) as exc:
         s.commit()  # a refused admission is stored too
         raise _bad(exc) from exc
+    s.commit()  # visible to the next request even before the session dependency closes
     return {**registry.summary(rec), "snapshot": rec.config}
 
 
@@ -120,6 +121,7 @@ def create_protocol(body: dict[str, Any], s: Session = Depends(get_session)) -> 
         e = protocol.create(s, protocol.ProtocolIn.model_validate(body))
     except (ValidationError, protocol.ProtocolError, LookupError) as exc:
         raise _bad(exc) from exc
+    s.commit()
     return {"id": e.id, "config_hash": e.config_hash, **e.config}
 
 
@@ -156,6 +158,7 @@ def start(body: StartIn, s: Session = Depends(get_session)) -> dict[str, Any]:
         prog = service.start(s, body.protocol_id, body.started_by)
     except (service.ProgramError, LookupError) as exc:
         raise _bad(exc) from exc
+    s.commit()
     return service.summary_row(prog)
 
 
@@ -207,6 +210,7 @@ def run(pid: str, body: RunIn, s: Session = Depends(get_session)) -> dict[str, A
     prog = _prog(s, pid)
     if body.run_async:
         job = submit_job(s, "paper_program_run", {"program_id": prog.id, "max_bars": body.max_bars})
+        s.commit()
         return {"job": JobOut.model_validate(job).model_dump(mode="json"), "result": None}
     try:
         return {"job": None, "result": service.run(s, prog.id, body.max_bars)}
@@ -244,6 +248,7 @@ def _act(s: Session, f: Any) -> dict[str, Any]:
         prog = f()
     except (service.ProgramError, LookupError) as exc:
         raise _bad(exc) from exc
+    s.commit()
     return service.summary_row(prog)
 
 
