@@ -16,6 +16,8 @@ test("evaluate a lab candidate in the Robustness Lab", async ({ page, request })
   await expect(page.getByText(`robustness run of ${title}`)).toBeVisible();
   await expect(row.getByRole("button", { name: "View" })).toBeVisible({ timeout: 150_000 });
   await row.getByRole("button", { name: "View" }).click();
+  // The run detail is large and other specs share the server (CPU-heavy simulations run in parallel): wait for it.
+  await expect(page.getByText("1 · Assets and markets")).toBeVisible({ timeout: 30_000 });
   for (const h of ["1 · Assets and markets", "2 · Walk-forward windows, years and regimes", "4 · Costs and execution: base, adverse, severe",
     "6 · Stress tests", "8 · Incremental portfolio contribution", "10 · Limitations and missing data"]) {
     await expect(page.getByText(h)).toBeVisible();
