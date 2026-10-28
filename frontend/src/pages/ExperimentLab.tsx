@@ -563,6 +563,9 @@ export default function ExperimentLabPage() {
     }, 2500);
     return () => clearInterval(t);
   }, [active, load, watchUntil]);
+  // Refresh the ranking as soon as an experiment finishes, not only when polling stops.
+  const finished = useMemo(() => rows.filter((r) => !ACTIVE.includes(r.status)).map((r) => `${r.id}:${r.status}`).join(","), [rows]);
+  useEffect(() => setVersion((v) => v + 1), [finished]);
   const queued = useCallback(() => {
     setWatchUntil(Date.now() + 10_000);
     load();
