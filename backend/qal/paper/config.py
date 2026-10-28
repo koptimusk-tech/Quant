@@ -15,7 +15,8 @@ MUTABLE_FIELDS = ("cost_scenario", "order_type", "limit_offset_bps", "order_ttl_
 
 
 class StrategyIn(BaseModel):
-    strategy_id: str = Field(description="H:<hypothesis id> (validated) or DEMO:<strategy type> (unvalidated)")
+    strategy_id: str = Field(description="H:<hypothesis id> (validated), P:<candidate id> (paper validation program) "
+                                         "or DEMO:<strategy type> (unvalidated)")
     dataset_ids: list[str] = Field(default_factory=list, description="DEMO only; hypotheses use their contract")
     params: dict[str, Any] = Field(default_factory=dict, description="DEMO only")
     allocation: float = Field(0.3, gt=0, le=2, description="Fraction of session equity given to the strategy")
@@ -62,6 +63,8 @@ class SessionConfig(BaseModel):
     policy_id: str | None = None
     criteria: EvaluationCriteria = Field(default_factory=EvaluationCriteria)
     created_by: str = Field(min_length=2, max_length=64)
+    program_id: str | None = Field(None, description="Set by the paper validation program: its history cannot be "
+                                                     "reset or deleted and its configuration cannot change")
 
     @model_validator(mode="after")
     def _check(self) -> SessionConfig:

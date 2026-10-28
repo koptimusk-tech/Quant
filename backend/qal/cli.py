@@ -248,6 +248,58 @@ def cmd_robustness_run(args: argparse.Namespace) -> None:
             print(f"written {f}")
 
 
+def cmd_program_audit(args: argparse.Namespace) -> None:
+    """Paper Trading Validation: the admission checks of every completed lab experiment. It admits nothing: an
+    admission needs a named person and a written justification (API or UI)."""
+    from qal.api.routers.program import eligibility
+
+    create_all()
+    with session_scope() as s:
+        rows = [r for r in eligibility(s) if not (args.real_only and r["is_synthetic"])]
+        for r in rows:
+            ok = "meets the evidence requirements" if r["meets_evidence_requirements"] else "NOT admissible as validated"
+            print(f"{r['lab_experiment_id']}  {r['title']}  decision={r['decision']}  "
+                  f"robustness={r['robustness_state']}  -> {ok}")
+            for c in r["checks"]:
+                print(f"      {'PASS' if c['passed'] else 'FAIL'}  {c['check']:<16} {c['detail']}")
+        print(f"{sum(r['meets_evidence_requirements'] for r in rows)} of {len(rows)} candidate(s) meet the evidence "
+              "requirements.")
+        if args.out:
+            path = Path(args.out)
+            path.mkdir(parents=True, exist_ok=True)
+            f = path / f"program_audit_{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}.json"
+            f.write_text(json.dumps(rows, indent=2, default=str), encoding="utf-8")
+            print(f"written {f}")
+
+
+def cmd_program_run(args: argparse.Namespace) -> None:
+    """Paper Trading Validation: move a program forward (simulation only) and print its state."""
+    from qal.program import service
+
+    create_all()
+    with session_scope() as s:
+        out = service.run(s, args.program, args.max_bars)
+        print(json.dumps(out, indent=2, default=str))
+
+
+def cmd_program_report(args: argparse.Namespace) -> None:
+    """Paper Trading Validation: write the final report of a program (with its configuration) as JSON."""
+    from qal.program import report, service
+
+    create_all()
+    with session_scope() as s:
+        rep = report.build(s, service.get(s, args.program))
+        print(f"{rep['label']}  status={rep['status']}  rules={rep['rule']['state']}  "
+              f"classification={rep['classification'].get('state') or 'pending review'}")
+        for x in rep["limitations"]:
+            print(f"  - {x}")
+        path = Path(args.out or ".")
+        path.mkdir(parents=True, exist_ok=True)
+        f = path / f"paper_validation_{args.program}.json"
+        f.write_text(json.dumps(rep, indent=2, default=str), encoding="utf-8")
+        print(f"written {f}")
+
+
 def cmd_worker(args: argparse.Namespace) -> None:
     from qal.jobs.runner import process_once
 
@@ -343,6 +395,18 @@ def main() -> None:
     rr.add_argument("--real-only", action="store_true", help="only candidates on real data")
     rr.add_argument("--out", default=None, help="directory for the JSON results")
     rr.set_defaults(fn=cmd_robustness_run)
+    pa = sub.add_parser("program-audit", help="Paper Trading Validation: admission checks of the lab candidates")
+    pa.add_argument("--real-only", action="store_true")
+    pa.add_argument("--out", help="Directory for a JSON copy")
+    pa.set_defaults(fn=cmd_program_audit)
+    pr = sub.add_parser("program-run", help="Paper Trading Validation: process bars of a program (simulation)")
+    pr.add_argument("--program", required=True)
+    pr.add_argument("--max-bars", type=int, default=5000)
+    pr.set_defaults(fn=cmd_program_run)
+    pp = sub.add_parser("program-report", help="Paper Trading Validation: write a program's report")
+    pp.add_argument("--program", required=True)
+    pp.add_argument("--out", help="Directory (default: current)")
+    pp.set_defaults(fn=cmd_program_report)
     args = p.parse_args()
     args.fn(args)
 

@@ -17,6 +17,10 @@ from qal.portfolio.risk import fx_legs
 from qal.portfolio.risk_manager import PolicyLimits
 from qal.portfolio.strategies import ELIGIBLE_STATUSES
 
+# Candidates admitted by a named person to the paper validation program (qal.program.registry); an altered record
+# reports UNKNOWN and is rejected.
+CANDIDATE_STATUSES = ("PAPER_CANDIDATE", "PAPER_CANDIDATE_EXPLORATORY")
+
 
 @dataclass
 class GateContext:
@@ -71,7 +75,8 @@ def evaluate(*, instrument: str, current_units: float, delta_units: float, price
                else "session not running or reconciliation failed"):
         return reject("system not in a tradable state")
     demo = ctx.strategy_status == "DEMO"
-    valid = ctx.strategy_status in ELIGIBLE_STATUSES or ctx.strategy_status == "MANUAL" or (demo and ctx.allow_demo)
+    valid = (ctx.strategy_status in ELIGIBLE_STATUSES or ctx.strategy_status in CANDIDATE_STATUSES
+             or ctx.strategy_status == "MANUAL" or (demo and ctx.allow_demo))
     if not chk("validation_status", ctx.strategy_status, list(ELIGIBLE_STATUSES), valid,
                "UNVALIDATED DEMO strategy, allowed only to exercise the simulator" if demo and valid
                else "strategy validated" if valid else f"strategy status {ctx.strategy_status} is not eligible"):

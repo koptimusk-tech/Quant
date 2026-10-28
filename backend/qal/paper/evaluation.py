@@ -39,6 +39,31 @@ def _sharpe(r: np.ndarray, ppy: float) -> float | None:
     return float(np.mean(r) / np.std(r, ddof=1) * np.sqrt(ppy))
 
 
+
+def backtest_on_bars(rt: Any, ps: PaperSession, ts: pd.DatetimeIndex) -> dict[str, Any]:
+    """The backtest of the session's strategies (same parameters, costs and allocations) on exactly the bars in
+    ``ts``: per-bar net returns, gross exposure, costs (account currency) and the per-strategy details."""
+    first, last = ts[0], ts[-1]
+    bt_r = pd.Series(0.0, index=ts)
+    gross = pd.Series(0.0, index=ts)
+    cost, ppy, plans = 0.0, 252.0, []
+    for plan in rt.plans:
+        syms = [rt.by_dataset[d] for d in plan.dataset_ids]
+        frames = [rt.instr[x].frame[rt.instr[x].frame["ts"] <= last] for x in syms]
+        al = align(frames)
+        w = plan.strategy().weights(al)
+        costs = [rt.cost(plan.id, x) for x in syms]
+        ac = rt.instr[syms[0]].info.asset_class
+        res = run_backtest(al, w, costs, capital=ps.initial_capital * plan.allocation, asset_class=ac, names=syms)
+        ppy = res.periods_per_year
+        bars = res.bars.set_index(pd.to_datetime(res.bars["ts"], utc=True))
+        sel = bars.loc[(bars.index >= first) & (bars.index <= last)]
+        cost += float(sel["cost"].sum()) * ps.initial_capital * plan.allocation
+        bt_r = bt_r.add(sel["net"].reindex(ts).fillna(0.0) * plan.allocation, fill_value=0.0)
+        gross = gross.add(sel["gross_exposure"].reindex(ts).fillna(0.0) * plan.allocation, fill_value=0.0)
+        plans.append({"plan": plan, "syms": syms, "aligned": al, "weights": w, "result": res, "bars": sel})
+    return {"returns": bt_r, "gross": gross, "cost": cost, "ppy": ppy, "plans": plans}
+
 def evaluate(s: Session, ps: PaperSession) -> dict[str, Any]:
     crit = EvaluationCriteria.model_validate(ps.criteria)
     rt = load_runtime(s, ps)
@@ -52,26 +77,11 @@ def evaluate(s: Session, ps: PaperSession) -> dict[str, Any]:
     paper_r = np.diff(np.concatenate([[ps.initial_capital], equity])) / np.concatenate([[ps.initial_capital], equity[:-1]])
     first, last = ts[0], ts[-1]
 
-    # backtest on the same bars, weighted by the strategies' allocations
-    bt_r = pd.Series(0.0, index=ts)
-    bt_gross_expo = pd.Series(0.0, index=ts)
+    bt_all = backtest_on_bars(rt, ps, ts)
+    bt_r, bt_gross_expo, bt_cost, ppy = bt_all["returns"], bt_all["gross"], bt_all["cost"], bt_all["ppy"]
     agree, compared, per_strategy = 0, 0, []
-    bt_cost = 0.0
-    ppy = 252.0
-    for plan in rt.plans:
-        syms = [rt.by_dataset[d] for d in plan.dataset_ids]
-        frames = [rt.instr[x].frame[rt.instr[x].frame["ts"] <= last] for x in syms]
-        al = align(frames)
-        w = plan.strategy().weights(al)
-        costs = [rt.cost(plan.id, x) for x in syms]
-        ac = rt.instr[syms[0]].info.asset_class
-        res = run_backtest(al, w, costs, capital=ps.initial_capital * plan.allocation, asset_class=ac, names=syms)
-        ppy = res.periods_per_year
-        bars = res.bars.set_index(pd.to_datetime(res.bars["ts"], utc=True))
-        sel = bars.loc[(bars.index >= first) & (bars.index <= last)]
-        bt_cost += float(sel["cost"].sum()) * ps.initial_capital * plan.allocation
-        bt_r = bt_r.add(sel["net"].reindex(ts).fillna(0.0) * plan.allocation, fill_value=0.0)
-        bt_gross_expo = bt_gross_expo.add(sel["gross_exposure"].reindex(ts).fillna(0.0) * plan.allocation, fill_value=0.0)
+    for part in bt_all["plans"]:
+        plan, syms, al, w, sel = part["plan"], part["syms"], part["aligned"], part["weights"], part["bars"]
         # signal agreement: the session's decision at bar t vs the full-history weights at bar t
         sigs = s.scalars(select(PaperSignal).where(PaperSignal.session_id == ps.id,
                                                    PaperSignal.strategy_id == plan.id)).all()

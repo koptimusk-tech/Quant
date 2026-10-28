@@ -4,6 +4,10 @@ Signals are kept apart from execution: this module returns target weights per in
 orders. A validated hypothesis trades with the parameters selected in its last validation window (the same
 ones the promotion step records); nothing here is fitted on the paper period.
 
+``P:<candidate id>`` runs a candidate of the paper validation program registry (``qal.program.registry``): the
+frozen snapshot's strategy, parameters, universe and costs. The record's hash is checked first; an altered or
+refused record cannot trade.
+
 ``DEMO:<strategy>`` runs a rule from the strategy library with explicit parameters. Demo strategies are not
 validated; a session may include them only when ``allow_unvalidated_demo`` is set, and every output says so.
 """
@@ -30,7 +34,7 @@ DEMO_NOTE = "UNVALIDATED DEMO: exercises the simulator only; not a validated str
 @dataclass
 class StrategyPlan:
     id: str
-    kind: str  # hypothesis, demo
+    kind: str  # hypothesis, candidate, demo
     type: str
     params: dict[str, Any]
     dataset_ids: list[str]
@@ -74,6 +78,25 @@ def resolve(session: Session, strategy_id: str, *, dataset_ids: list[str] | None
                             {"experiment_id": exp.id, "oos_sharpe_net": metrics.get("sharpe_net"),
                              "oos_max_drawdown": metrics.get("max_drawdown"), "oos_bars": metrics.get("bars"),
                              "oos_volatility_ann": metrics.get("volatility_ann")}), []
+    if strategy_id.startswith("P:"):
+        from qal.program import registry
+
+        rec = session.get(Experiment, strategy_id[2:])
+        if rec is None or rec.kind != registry.KIND or rec.status != "admitted":
+            return None, [f"{strategy_id}: not an admitted candidate of the paper validation registry"]
+        if not registry.verify(rec):
+            return None, [f"{strategy_id}: the candidate record does not match its hash"]
+        c = rec.config
+        costs = {d: {k: v for k, v in m.items() if k != "source"} for d, m in c["costs"].items()}
+        notes = [f"candidate {c['name']} v{c['version']} ({c['admission']['kind']} admission)"]
+        if c["admission"]["kind"] == "exploratory":
+            notes.append("EXPLORATORY: admitted without meeting the evidence requirements; not validation evidence.")
+        return StrategyPlan(strategy_id, "candidate", c["strategy"]["type"], dict(c["strategy"]["params"]),
+                            [a["dataset_id"] for a in c["assets"]], allocation, c["status"], None, costs,
+                            {"candidate_id": rec.id, "lab_experiment_id": c["lab"]["experiment_id"],
+                             "oos_sharpe_net": c["results"]["oos"].get("sharpe_net"),
+                             "oos_max_drawdown": c["results"]["oos"].get("max_drawdown"),
+                             "oos_bars": c["results"]["oos"].get("bars")}, notes), []
     if strategy_id.startswith("DEMO:"):
         typ = strategy_id[5:]
         if not allow_demo:
@@ -91,7 +114,7 @@ def resolve(session: Session, strategy_id: str, *, dataset_ids: list[str] | None
             return None, [f"{strategy_id}: needs {n or '3 or more'} dataset(s)"]
         return StrategyPlan(strategy_id, "demo", typ, dict(params or {}), list(dataset_ids), allocation, "DEMO",
                             notes=[DEMO_NOTE]), []
-    return None, [f"{strategy_id}: use H:<hypothesis id> or DEMO:<strategy type>"]
+    return None, [f"{strategy_id}: use H:<hypothesis id>, P:<candidate id> or DEMO:<strategy type>"]
 
 
 def cost_model(plan: StrategyPlan, dataset_id: str, asset_class: str) -> CostModel:

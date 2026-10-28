@@ -1389,3 +1389,30 @@ export const robustness = {
   exportJsonUrl: (id: string) => `${BASE}/robustness/runs/${id}/export.json`,
   matrixCsvUrl: (id: string) => `${BASE}/robustness/runs/${id}/matrix.csv`,
 };
+
+// -- Paper Trading Validation (Phase 12) ------------------------------------------------------------------
+type Obj = Record<string, any>;
+const postJson = <T,>(path: string, body: unknown) => request<T>(path, { method: "POST", body: JSON.stringify(body) });
+
+export const program = {
+  meta: () => request<Obj>("/program/meta"),
+  eligibility: () => request<Obj[]>("/program/eligibility"),
+  candidates: () => request<Obj[]>("/program/candidates"),
+  candidate: (id: string) => request<Obj>(`/program/candidates/${id}`),
+  versions: (id: string) => request<Obj[]>(`/program/candidates/${id}/versions`),
+  admit: (body: Obj) => postJson<Obj>("/program/candidates", body),
+  protocols: () => request<Obj[]>("/program/protocols"),
+  preview: (body: Obj) => postJson<Obj>("/program/protocols/preview", body),
+  createProtocol: (body: Obj) => postJson<Obj>("/program/protocols", body),
+  programs: () => request<Obj[]>("/program/programs"),
+  start: (body: Obj) => postJson<Obj>("/program/programs", body),
+  get: (id: string) => request<Obj>(`/program/programs/${id}`),
+  run: (id: string, maxBars: number) => postJson<Obj>(`/program/programs/${id}/run`, { max_bars: maxBars, run_async: false }),
+  pause: (id: string, body: Obj) => postJson<Obj>(`/program/programs/${id}/pause`, body),
+  resume: (id: string, body: Obj) => postJson<Obj>(`/program/programs/${id}/resume`, body),
+  stop: (id: string, body: Obj) => postJson<Obj>(`/program/programs/${id}/stop`, body),
+  kill: (id: string, body: Obj) => postJson<Obj>(`/program/programs/${id}/kill-switch`, body),
+  review: (id: string, body: Obj) => postJson<Obj>(`/program/programs/${id}/review`, body),
+  report: (id: string) => request<Obj>(`/program/programs/${id}/report`),
+  exportUrl: (id: string) => `${BASE}/program/programs/${id}/export.json`,
+};

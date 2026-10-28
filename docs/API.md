@@ -126,3 +126,23 @@ Detalle en [ROBUSTNESS_LAB.md](ROBUSTNESS_LAB.md).
 | POST | `/robustness/runs` | `{experiment_id, target_dataset_ids, max_targets, capital_levels, impact_coefficient, min_capacity, peer_experiment_ids, max_seconds, run_async}`; trabajo `robustness_run`. |
 | GET | `/robustness/runs?experiment_id=&state=` · `/robustness/runs/{id}` | Runs y resultados completos. |
 | GET | `/robustness/runs/{id}/export.json` · `/robustness/runs/{id}/matrix.csv` | Exportaciones. |
+
+## Paper Trading Validation
+
+Solo simulación: ningún endpoint envía órdenes ni autoriza operar. Admitir, congelar protocolos, iniciar, reanudar,
+parar y revisar requieren una persona con nombre (los agentes se rechazan). Detalle en
+[PAPER_VALIDATION.md](PAPER_VALIDATION.md).
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/program/meta` | Modos, estados, revisiones permitidas, causas de pausa, métricas, reglas y valores por defecto. |
+| GET | `/program/eligibility` | Experimentos completados del laboratorio con sus comprobaciones de admisión. |
+| POST · GET | `/program/candidates` | `{name, lab_experiment_id, robustness_run_id, admitted_by, justification, exploratory, allocation, risk_limits}`; los rechazos también se guardan. |
+| GET | `/program/candidates/{id}` · `/program/candidates/{id}/versions` | Instantánea con hash; versiones con sus programas. |
+| POST | `/program/protocols/preview` · `/program/protocols` | Vista previa del horizonte; congelar un protocolo. |
+| GET | `/program/protocols` · `/program/protocols/{id}` | Protocolos con integridad y programa asociado. |
+| POST · GET | `/program/programs` | `{protocol_id, started_by}`; lista con estado de reglas y clasificación. |
+| GET | `/program/programs/{id}` | Estado, seguimiento, comparación, reglas, pausas, revisiones, línea temporal, feed y eventos. |
+| POST | `/program/programs/{id}/run` | `{max_bars, run_async}`; trabajo `paper_program_run`. |
+| POST | `/program/programs/{id}/pause` · `/resume` · `/stop` · `/kill-switch` · `/review` | Operaciones auditadas. |
+| GET | `/program/programs/{id}/report` · `/program/programs/{id}/export.json` | Informe final con configuración y limitaciones. |

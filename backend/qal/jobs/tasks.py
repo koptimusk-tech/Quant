@@ -203,9 +203,20 @@ def handle_robustness_run(session: Session, payload: dict[str, Any], actor: str)
             "error": exp.error}
 
 
+def handle_paper_program_run(session: Session, payload: dict[str, Any], actor: str) -> dict[str, Any]:
+    """payload: {"program_id", "max_bars"}. Moves a paper validation program forward (simulation only); a schedule
+    with this kind advances a prospective (mode B) program after each ingestion."""
+    from qal.program import service
+
+    out = service.run(session, payload["program_id"], int(payload.get("max_bars", 5000)))
+    session.commit()
+    return out
+
+
 HANDLERS = {"ingest": handle_ingest, "scan": handle_scan, "ingest_and_scan": handle_ingest_and_scan,
             "validate": handle_validate, "alpha_cycle": handle_alpha_cycle,
             "model_experiment": handle_model_experiment, "portfolio_run": handle_portfolio_run,
             "portfolio_proposals": handle_portfolio_proposals, "paper_run": handle_paper_run,
-            "lab_experiment": handle_lab_experiment, "robustness_run": handle_robustness_run}
+            "lab_experiment": handle_lab_experiment, "robustness_run": handle_robustness_run,
+            "paper_program_run": handle_paper_program_run}
 __all__ = ["HANDLERS", "latest_dataset"]
