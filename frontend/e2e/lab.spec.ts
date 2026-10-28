@@ -20,7 +20,8 @@ test("generate, run and inspect a lab experiment", async ({ page }) => {
   await row.getByRole("button", { name: "Open" }).click();
   await expect(page.getByRole("tab", { name: "B Baselines" })).toBeVisible();
   await page.getByRole("tab", { name: "B Baselines" }).click();
-  await expect(page.getByRole("cell", { name: "permuted_signal" })).toBeVisible();
+  // The ranking can also show "permuted_signal" (baselines beaten): check the row only the baselines tab has.
+  await expect(page.getByRole("cell", { name: /circularly shifted/ })).toBeVisible();
   await page.getByRole("tab", { name: "Versions" }).click();
   await expect(page.getByText("this one")).toBeVisible();
   await expect(page.getByRole("link", { name: "Export JSON" })).toBeVisible();
