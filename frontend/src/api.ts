@@ -1416,3 +1416,19 @@ export const program = {
   report: (id: string) => request<Obj>(`/program/programs/${id}/report`),
   exportUrl: (id: string) => `${BASE}/program/programs/${id}/export.json`,
 };
+
+export const review = {
+  meta: () => request<Obj>("/review/meta"),
+  summary: () => request<Obj>("/review/summary"),
+  run: (by: string) => postJson<Obj[]>("/review/run", { by }),
+  strategies: (params: Record<string, string>) => {
+    const q = new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString();
+    return request<Obj[]>(`/review/strategies${q ? `?${q}` : ""}`);
+  },
+  decision: (id: string) => request<Obj>(`/review/decisions/${id}`),
+  regenerate: (id: string) => request<Obj>(`/review/decisions/${id}/regenerate`),
+  manual: (id: string, body: Obj) => postJson<Obj>(`/review/decisions/${id}/manual`, body),
+  history: (subject: string) => request<Obj[]>(`/review/history?subject=${encodeURIComponent(subject)}`),
+  reportJsonUrl: (id: string) => `${BASE}/review/decisions/${id}/report.json`,
+  reportMdUrl: (id: string) => `${BASE}/review/decisions/${id}/report.md`,
+};

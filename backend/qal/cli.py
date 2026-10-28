@@ -300,6 +300,67 @@ def cmd_program_report(args: argparse.Namespace) -> None:
         print(f"written {f}")
 
 
+
+def cmd_review_audit(args: argparse.Namespace) -> None:
+    """Strategy Review: the evidence that exists (sessions, evidence class, decisions) and what is still missing.
+    It changes nothing."""
+    from qal.review import service
+
+    create_all()
+    with session_scope() as s:
+        out = service.phase_summary(s)
+        print(f"status: {out['status']}  ({len(out['subjects'])} paper session(s), {out['prospective_subjects']} with "
+              "prospective evidence)")
+        for r in out["subjects"]:
+            d = r["decision"]
+            print(f"  {r['subject']}  " + (f"{d['strategy']} v{d['version']}  {d['evidence_class']}  bars={d['bars']}  "
+                                            f"state={d['state']}  current={r['current'].get('state')}" if d else
+                                            "not reviewed yet (run review-run)"))
+        for x in out["to_collect"]:
+            print(f"  to collect: {x}")
+        _write(args.out, "review_audit", out)
+
+
+def cmd_review_run(args: argparse.Namespace) -> None:
+    """Strategy Review: run the deterministic decision engine on every paper session and store new decisions."""
+    from qal.review import service
+
+    create_all()
+    with session_scope() as s:
+        rows = service.run(s, args.by)
+        for r in rows:
+            print(f"{r['subject']}  {r['strategy']} v{r['version']}  {r['evidence_class']}  integrity={r['integrity']}  "
+                  f"-> {r['state']}{'' if r['stored'] else ' (unchanged)'}")
+            print(f"      {r['reason']}")
+        if not rows:
+            print("no paper session to review: INSUFFICIENT_EVIDENCE (nothing is fabricated)")
+        _write(args.out, "review_run", rows)
+
+
+def cmd_review_report(args: argparse.Namespace) -> None:
+    """Strategy Review: write the report of a decision (JSON and Markdown)."""
+    from qal.review import report, service
+
+    create_all()
+    with session_scope() as s:
+        rep = report.build(s, service.get_decision(s, args.decision))
+        path = Path(args.out or ".")
+        path.mkdir(parents=True, exist_ok=True)
+        (path / f"strategy_review_{args.decision}.json").write_text(json.dumps(rep, indent=2, default=str),
+                                                                    encoding="utf-8")
+        (path / f"strategy_review_{args.decision}.md").write_text(report.markdown(rep), encoding="utf-8")
+        print(f"written {path / f'strategy_review_{args.decision}.md'} and .json")
+
+
+def _write(out: str | None, name: str, obj: object) -> None:
+    if not out:
+        return
+    path = Path(out)
+    path.mkdir(parents=True, exist_ok=True)
+    f = path / f"{name}_{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}.json"
+    f.write_text(json.dumps(obj, indent=2, default=str), encoding="utf-8")
+    print(f"written {f}")
+
 def cmd_worker(args: argparse.Namespace) -> None:
     from qal.jobs.runner import process_once
 
@@ -407,6 +468,17 @@ def main() -> None:
     pp.add_argument("--program", required=True)
     pp.add_argument("--out", help="Directory (default: current)")
     pp.set_defaults(fn=cmd_program_report)
+    ra = sub.add_parser("review-audit", help="Strategy Review: evidence available and what is missing")
+    ra.add_argument("--out")
+    ra.set_defaults(fn=cmd_review_audit)
+    rr = sub.add_parser("review-run", help="Strategy Review: run the decision engine and store new decisions")
+    rr.add_argument("--by", required=True, help="who triggers the review (recorded)")
+    rr.add_argument("--out")
+    rr.set_defaults(fn=cmd_review_run)
+    rp = sub.add_parser("review-report", help="Strategy Review: write the report of a decision")
+    rp.add_argument("--decision", required=True)
+    rp.add_argument("--out")
+    rp.set_defaults(fn=cmd_review_report)
     args = p.parse_args()
     args.fn(args)
 

@@ -68,6 +68,12 @@ Estado: **Fases 0, 1 y 2 completadas, con app de escritorio.** Ver [ROADMAP.md](
   histórico / paper prospectivo / simulación sintética separados y etiquetados, comparación con el backtest de la
   misma versión en las mismas barras, seguimiento con incertidumbre, causas de pausa con reanudación auditada y
   clasificación por reglas con revisión documentada. Solo simulación. Ver [docs/PAPER_VALIDATION.md](docs/PAPER_VALIDATION.md).
+- **Revisión de resultados y decisión (Fase 13)**: inventario de la evidencia por estrategia y versión (histórica,
+  prospectiva o sintética), controles de integridad antes de evaluar, métricas con su tamaño de muestra o
+  `INSUFFICIENT_DATA`, incertidumbre con dependencia y comparaciones múltiples, comparación con el backtest solo si
+  las configuraciones son compatibles, criterios originales con enmiendas registradas aparte, motor de decisión
+  determinista y versionado, diagnóstico de causas e informe por estrategia. Pantalla Strategy Review & Readiness.
+  Ver [docs/STRATEGY_REVIEW.md](docs/STRATEGY_REVIEW.md).
 - **App de escritorio** (Tauri) que arranca el motor local y abre la interfaz. Instaladores para Windows, macOS y
   Linux sin necesidad de Python, generados en GitHub Actions. Ver [desktop/README.md](desktop/README.md).
 - **Integración continua** (`.github/workflows/ci.yml`): pruebas del backend en SQLite y PostgreSQL, frontend y
@@ -173,6 +179,13 @@ Programa de validación en paper trading: qué candidatas cumplen los requisitos
 
 ```powershell
 ..\.venv\Scripts\python -m qal.cli program-audit --real-only --out program_runs
+```
+
+Revisión de resultados de paper trading (ver `docs/STRATEGY_REVIEW.md`): qué evidencia existe, y decisiones del motor:
+
+```powershell
+..\.venv\Scripts\python -m qal.cli review-audit --out review_runs
+..\.venv\Scripts\python -m qal.cli review-run --by "tu nombre" --out review_runs
 ```
 
 **6. Cargar datos reales**
@@ -314,6 +327,7 @@ Metodología: [docs/RESEARCH.md](docs/RESEARCH.md).
 - [docs/EXPERIMENT_LAB.md](docs/EXPERIMENT_LAB.md): contrato de experimentos, pipeline de validación, selección y ejemplo.
 - [docs/ROBUSTNESS_LAB.md](docs/ROBUSTNESS_LAB.md): matriz por activo y mercado, sensibilidad, costes, capacidad, estrés y estados.
 - [docs/PAPER_VALIDATION.md](docs/PAPER_VALIDATION.md): registro de candidatas, protocolo, modos, pausas, criterios y revisión.
+- [docs/STRATEGY_REVIEW.md](docs/STRATEGY_REVIEW.md): integridad, métricas, incertidumbre, criterios, motor de decisión e informes.
 - [desktop/README.md](desktop/README.md): app de escritorio.
 - [docs/DETECTORS.md](docs/DETECTORS.md): estadísticos, supuestos y limitaciones de cada detector.
 - [docs/DATA_PROVIDERS.md](docs/DATA_PROVIDERS.md): evaluación de proveedores.

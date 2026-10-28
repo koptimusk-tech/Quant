@@ -146,3 +146,24 @@ parar y revisar requieren una persona con nombre (los agentes se rechazan). Deta
 | POST | `/program/programs/{id}/run` | `{max_bars, run_async}`; trabajo `paper_program_run`. |
 | POST | `/program/programs/{id}/pause` · `/resume` · `/stop` · `/kill-switch` · `/review` | Operaciones auditadas. |
 | GET | `/program/programs/{id}/report` · `/program/programs/{id}/export.json` | Informe final con configuración y limitaciones. |
+
+## Strategy Review & Readiness
+
+Revisión determinista de los resultados de paper trading. Solo simulación: ningún estado, tampoco `COMPLETED` ni
+`SUPPORTED_FOR_FURTHER_RESEARCH`, autoriza operar. Las decisiones no se editan: cada revisión nueva es un registro
+nuevo. Las revisiones manuales y las enmiendas requieren una persona con nombre. Detalle en
+[STRATEGY_REVIEW.md](STRATEGY_REVIEW.md).
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/review/meta` | Estados, revisiones manuales permitidas, reglas del motor, clases de evidencia y versiones. |
+| GET | `/review/summary` | Estado de la fase (`INSUFFICIENT_EVIDENCE` o `EVIDENCE_AVAILABLE`) y qué falta por recopilar. |
+| POST | `/review/run` | `{by, subjects?}`; ejecuta el motor sobre todas las sesiones y guarda las decisiones que cambian. |
+| GET | `/review/strategies` | Última decisión por estrategia y versión; filtros `strategy`, `market`, `asset`, `start`, `end`, `state`, `evidence_class`. |
+| GET | `/review/inventory` | Inventario de evidencia de cada sesión. |
+| GET | `/review/decisions/{id}` | Resumen e informe completo (12 secciones y conclusiones). |
+| GET | `/review/decisions/{id}/report.json` · `/report.md` | Informe exportable. |
+| GET | `/review/decisions/{id}/regenerate` | Recalcula la decisión desde los datos guardados y dice si se reproduce. |
+| POST | `/review/decisions/{id}/manual` | `{by, state, rationale}`; el mismo estado o uno más conservador. |
+| GET | `/review/history?subject=` | Decisiones del motor y revisiones manuales, en orden. |
+| POST · GET | `/review/protocols/{id}/amendments` | `{by, changes, justification, impact_expected}`; el protocolo original se conserva. |
