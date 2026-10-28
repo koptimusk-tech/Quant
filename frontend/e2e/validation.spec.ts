@@ -3,8 +3,14 @@ import { expect, test } from "@playwright/test";
 // Admit a demo lab experiment as an exploratory candidate, freeze a protocol, run the program and read its sections.
 test("run a paper validation program on synthetic data", async ({ page, request }) => {
   test.setTimeout(180_000);
-  const gen = await (await request.post("/api/v1/lab/generate", { data: { families: ["momentum"], limit: 1 } })).json();
-  const sub = await request.post("/api/v1/lab/experiments", { data: { spec: gen.proposed[0].spec, run_async: false } });
+  // Other specs load real (non-synthetic) files into the same database: pick a proposal on synthetic data only,
+  // because synthetic candidates run in mode C.
+  const datasets: { id: string; is_synthetic: boolean }[] = await (await request.get("/api/v1/datasets")).json();
+  const synthetic = new Set(datasets.filter((d) => d.is_synthetic).map((d) => d.id));
+  const gen = await (await request.post("/api/v1/lab/generate", { data: { families: ["momentum"], limit: 50 } })).json();
+  const pick = gen.proposed.find((p: { spec: { contract: { dataset_ids: string[] } } }) => p.spec.contract.dataset_ids.every((d) => synthetic.has(d)));
+  expect(pick).toBeTruthy();
+  const sub = await request.post("/api/v1/lab/experiments", { data: { spec: pick.spec, run_async: false } });
   expect(sub.ok()).toBeTruthy();
   const exp = (await sub.json()).experiment;
   const cand = await request.post("/api/v1/program/candidates", { data: {
