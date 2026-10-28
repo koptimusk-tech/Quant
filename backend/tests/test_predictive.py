@@ -64,9 +64,9 @@ def test_runner_uses_only_real_data_reports_missing_and_writes_outputs(env, sess
                 assert row["in_sample"]["run_wide_adjusted_pvalue"] >= row["in_sample"]["adjusted_pvalue"] - 1e-12
     out = tmp_path / "out"
     assert {p.name for p in out.iterdir()} == {"results.json", "comparison.csv", "data_audit.json", "report.md"}
-    assert json.loads((out / "results.json").read_text())["run_hash"] == r["run_hash"]
+    assert json.loads((out / "results.json").read_text(encoding="utf-8"))["run_hash"] == r["run_hash"]
     assert "heuristic" in r["priority_note"] and "not calibrated" in r["priority_note"]
-    report = (out / "report.md").read_text()
+    report = (out / "report.md").read_text(encoding="utf-8")
     assert "Datos reales únicamente" in report and "EURUSD 1h" in report
 
     # Same data and config: same studies (cached experiments) and same run hash.

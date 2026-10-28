@@ -43,7 +43,7 @@ from qal.research.costs import CostModel, default_cost_model
 from qal.research.metrics import summary
 from qal.research.validation import Validator
 
-ROBUSTNESS_VERSION = "robustness@1.0.0"
+ROBUSTNESS_VERSION = "robustness@1.0.1"
 
 EXECUTION_SCENARIOS: dict[str, dict[str, float]] = {
     "base": {"cost_multiplier": 1.0, "delay_bars": 0, "participation_factor": 1.0},
@@ -445,16 +445,36 @@ def capacity(ctx: Context, levels: list[float], impact_coefficient: float, min_c
 def _rebuild(f: pd.DataFrame, logret: np.ndarray) -> pd.DataFrame:
     """New close path from log returns, keeping each bar's open/high/low relative to its close."""
     g = f.copy()
-    c0 = float(f["close"].iloc[0])
-    new_c = c0 * np.exp(np.concatenate([[0.0], np.cumsum(logret[1:])]))
-    k = new_c / f["close"].to_numpy(float)
+    px = _adjusted(f)
+    new_px = px[0] * np.exp(np.concatenate([[0.0], np.cumsum(logret[1:])]))
+    k = new_px / px
     for col in ("open", "high", "low", "close"):
         g[col] = f[col].to_numpy(float) * k
-    if "adj_close" in g:
-        g["adj_close"] = g["close"]
+    _keep_adjustment(f, g)
     g["high"] = g[["open", "high", "close"]].max(axis=1)
     g["low"] = g[["open", "low", "close"]].min(axis=1)
     return g
+
+
+def _adjusted(f: pd.DataFrame) -> np.ndarray:
+    """Dividend/split-adjusted close (the close when there is no usable adj_close), as the backtest prices returns."""
+    c = f["close"].to_numpy(float)
+    if "adj_close" not in f or f["adj_close"].notna().mean() <= 0.95:
+        return c
+    a = f["adj_close"].to_numpy(float)
+    return np.where(np.isfinite(a), a, c)
+
+
+def _keep_adjustment(f: pd.DataFrame, g: pd.DataFrame, frozen: list[int] | None = None) -> None:
+    """Keep the dividend/split factor adj_close / close of the original bars on the perturbed ones (a frozen bar
+    keeps the previous bar's). Writing the unadjusted close into adj_close would create fake jumps on assets with
+    large distributions."""
+    if "adj_close" not in f:
+        return
+    factor = (f["adj_close"] / f["close"]).to_numpy(float).copy()
+    for b in frozen or []:
+        factor[b] = factor[b - 1]
+    g["adj_close"] = g["close"].to_numpy(float) * factor
 
 
 def stress_frames(frames: list[pd.DataFrame], idx: np.ndarray) -> dict[str, tuple[str, list[pd.DataFrame] | None]]:
@@ -463,7 +483,8 @@ def stress_frames(frames: list[pd.DataFrame], idx: np.ndarray) -> dict[str, tupl
     mid = lo + (hi - lo) // 2
 
     def lr(f: pd.DataFrame) -> np.ndarray:
-        return np.log(f["close"].to_numpy(float)) - np.log(f["close"].shift(1).bfill().to_numpy(float))
+        px = _adjusted(f)
+        return np.log(px) - np.log(np.concatenate([[px[0]], px[:-1]]))
 
     def vol2(f):
         r = lr(f)
@@ -476,8 +497,7 @@ def stress_frames(frames: list[pd.DataFrame], idx: np.ndarray) -> dict[str, tupl
             k[b:] *= 0.92
         for col in ("open", "high", "low", "close"):
             g[col] = f[col].to_numpy(float) * k
-        if "adj_close" in g:
-            g["adj_close"] = g["close"]
+        _keep_adjustment(f, g)
         g["high"] = g[["open", "high", "close"]].max(axis=1)
         g["low"] = g[["open", "low", "close"]].min(axis=1)
         return g
@@ -489,14 +509,13 @@ def stress_frames(frames: list[pd.DataFrame], idx: np.ndarray) -> dict[str, tupl
 
     def stale(f):
         g = f.copy()
-        for b in range(lo, hi + 1, 20):
-            if b > 0:
-                pc = float(g["close"].iloc[b - 1])
-                for col in ("open", "high", "low", "close"):
-                    g.loc[g.index[b], col] = pc
-                if "adj_close" in g:
-                    g.loc[g.index[b], "adj_close"] = pc
-                g.loc[g.index[b], "volume"] = 0.0
+        frozen = [b for b in range(lo, hi + 1, 20) if b > 0]
+        for b in frozen:
+            pc = float(g["close"].iloc[b - 1])
+            for col in ("open", "high", "low", "close"):
+                g.loc[g.index[b], col] = pc
+            g.loc[g.index[b], "volume"] = 0.0
+        _keep_adjustment(f, g, frozen)
         return g
 
     def regime_break(f):

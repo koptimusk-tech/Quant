@@ -110,7 +110,7 @@ def cmd_alpha_cycle(args: argparse.Namespace) -> None:
     from qal.research.costs import CostModel
 
     create_all()
-    costs = {k: CostModel(**v) for k, v in json.loads(Path(args.costs).read_text()).items()} if args.costs else {}
+    costs = {k: CostModel(**v) for k, v in json.loads(Path(args.costs).read_text(encoding="utf-8")).items()} if args.costs else {}
     budget = Budget(max_ideas=args.max_ideas, max_hypotheses=args.max_hypotheses,
                     max_experiments=args.max_experiments, max_variants=args.max_variants,
                     max_seconds=args.max_seconds)
@@ -194,7 +194,7 @@ def cmd_lab_run(args: argparse.Namespace) -> None:
     store = ParquetStore(get_settings().data_dir)
     with session_scope() as s:
         todo: list[tuple[ExperimentSpec, str | None]] = [
-            (ExperimentSpec.model_validate(json.loads(Path(f).read_text())), None) for f in args.spec]
+            (ExperimentSpec.model_validate(json.loads(Path(f).read_text(encoding="utf-8"))), None) for f in args.spec]
         if args.generate:
             g = generator.generate(s, families=args.families.split(",") if args.families else None, limit=args.limit)
             print(f"generator proposed {g['n_specs']} specs ({g['n_variants']} variants), skipped {len(g['skipped'])}")

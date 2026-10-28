@@ -376,7 +376,7 @@ def test_lab_cannot_place_orders_or_reach_brokers():
     root = pathlib.Path(service.__file__).parent
     files = [*root.glob("*.py"), root.parent / "api" / "routers" / "lab.py"]
     for f in files:
-        tree = ast.parse(f.read_text())
+        tree = ast.parse(f.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             names = [a.name for a in node.names] if isinstance(node, ast.Import) else \
                 [node.module or ""] if isinstance(node, ast.ImportFrom) else []
